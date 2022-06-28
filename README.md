@@ -7,10 +7,13 @@ Work in progress !
 FOR THE TIME BEING, IT IS VERY INCOMPLETE AND UNTESTED
 
 NOTE: I am focusing first on my other integration https://github.com/infradom/ecopower_dynamic_grid_prices
-Ecopower customers may te better served with that other app.
+Ecopower customers may be better served with that other app.
+
+# This software:
 
 This integration will periodically pull the dynamic grid prices from the https://transparency.entsoe.eu API platform (and/or the Belgian Ecopower trial API)
 I know similar integrations exist, but this one wont need a dependency on node-red. The Nordpool integration is a good alternative, but has no knowledge of the ecopower prices.
+In the future, the ecopower part of this sofware will be removed as my new ecopower integration will be capable of referring to this one as backup source of day-ahead-prices.
 
 ## Entsoe data source:
 If you want to use entsoe as data source, you will need to create a entsoe platform login and request an API token so that the integration can access the day-ahead-prices.
