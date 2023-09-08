@@ -2,7 +2,7 @@
 
 DOMAIN = "dynamic_grid_prices_solar"
 
-ENTSOE_DAYAHEAD_URL = "https://transparency.entsoe.eu/api?securityToken={TOKEN}&documentType=A44&in_Domain={AREA}&out_Domain={AREA}&periodStart={START}&periodEnd={END}"
+ENTSOE_DAYAHEAD_URL = "https://web-api.tp.entsoe.eu/api?securityToken={TOKEN}&documentType=A44&in_Domain={AREA}&out_Domain={AREA}&periodStart={START}&periodEnd={END}"
 ECOPWR_DAYAHEAD_URL = "https://acc.ameo.app/api/v2/characteristics/{CURVE}"
 ECOPWR_INJECTION = 590
 ECOPWR_CONSUMPTION = 622
