@@ -61,7 +61,7 @@ now:
 yaxis:
   - decimals: 2
 series:
-  - entity: sensor.ecopower_injection_price
+  - entity: sensor.dynamic_grid_prices_injection_price
     type: column
     float_precision: 3
     data_generator: |
