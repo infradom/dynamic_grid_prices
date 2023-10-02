@@ -19,7 +19,7 @@ The Entsoe data source is generic and does not know your power providers markup 
 # Installation
 This custom integration cannot be installed through HACS yet, as we feel it is still too experimental.
 You can install it manually by copying the contents of the custom_components/dynamic_grid_prices folder to your home assistant's config/custom_components folder. A restart your HA software may be required.
-Then under settings->devices&services, press the 'add integration button', type or select DynGridPricesSolar 
+Then under settings->devices&services, press the 'add integration button', type or select DynGridPrices 
 A config dialog will be displayed.
 
 # Configuration parameters:
