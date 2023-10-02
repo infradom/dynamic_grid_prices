@@ -15,8 +15,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 import time
 from collections.abc import Mapping
-from .const import ENTSOE_DAYAHEAD_URL, ENTSOE_HEADERS,STARTUP_MESSAGE, CONF_ENTSOE_AREA, CONF_ENTSOE_TOKEN, CONF_ECOPWR_TOKEN
-from .const import ECOPWR_CONSUMPTION, ECOPWR_INJECTION, ECOPWR_HEADERS, ECOPWR_DAYAHEAD_URL
+from .const import ENTSOE_DAYAHEAD_URL, ENTSOE_HEADERS,STARTUP_MESSAGE, CONF_ENTSOE_AREA, CONF_ENTSOE_TOKEN
 from .const import DOMAIN, PLATFORMS, SENSOR
 
 # TODO List the platforms that you want to support.
@@ -39,20 +38,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if hass.data.get(DOMAIN) is None:
         hass.data.setdefault(DOMAIN, {})
         _LOGGER.info(STARTUP_MESSAGE)
-
+    config = entry.options
     entsoe_client   = None
-    ecopower_client = None
-    entsoe_token = entry.data.get(CONF_ENTSOE_TOKEN)
-    ecopwr_token = entry.data.get(CONF_ECOPWR_TOKEN)
-    area = entry.data.get(CONF_ENTSOE_AREA)
+    entsoe_token = config.get(CONF_ENTSOE_TOKEN)
+    area = config.get(CONF_ENTSOE_AREA)
     if entsoe_token: # deliberately string None since paramter is required
         entsoe_session = async_get_clientsession(hass)
         entsoe_client = EntsoeApiClient(entsoe_session, entsoe_token, area)
-    if ecopwr_token:
-        ecopower_session = async_get_clientsession(hass)
-        ecopower_client = EcopowerApiClient(ecopower_session, ecopwr_token)
 
-    coordinator = DynPriceUpdateCoordinator(hass, entsoe_client= entsoe_client, ecopower_client = ecopower_client)
+
+    coordinator = DynPriceUpdateCoordinator(hass, entsoe_client= entsoe_client)
     await coordinator.async_refresh()
 
     if not coordinator.last_update_success:
@@ -61,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     for platform in PLATFORMS:
-        if entry.options.get(platform, True):
+        if config.get(platform, True):
             coordinator.platforms.append(platform)
             hass.async_add_job(
                 hass.config_entries.async_forward_entry_setup(entry, platform)
@@ -138,55 +133,18 @@ class EntsoeApiClient:
             _LOGGER.exception(f"cannot fetch api data from entsoe: {exception}") 
 
 
-class EcopowerApiClient:
-    def __init__(self, session: aiohttp.ClientSession, token: str ) -> None:
-        self._token = token
-        self._session = session
 
-    async def async_get_data(self, url: str = ECOPWR_DAYAHEAD_URL.format(CURVE=ECOPWR_CONSUMPTION) ) -> dict:
-        now = datetime.now(timezone.utc)
-        try:
-            async with async_timeout.timeout(TIMEOUT):
-                headers = ECOPWR_HEADERS
-                headers['authorization'] = headers['authorization'].format(TOKEN = self._token)
-                response = await self._session.get(url, headers=headers)
-                if response.status != 200:
-                    _LOGGER.error(f'invalid response code from ecopower: {response.status}')
-                    return None
-                xpars = await response.json()
-                res = { 'lastday' : 0, 'points': {} }
-                bucketDuration = xpars['bucketDuration']
-                if bucketDuration:
-                    series = xpars['values']
-                    seconds = bucketDuration * 60 # 900
-                    for point in series:
-                        if point["valueStatus"] == "valid": price = float(point["value"])
-                        zulutime = datetime.strptime(point["date"],'%Y-%m-%dT%H:%M:%S+00:00').replace(tzinfo=timezone.utc)
-                        timestamp = zulutime.timestamp()
-                        localtime = datetime.fromtimestamp(timestamp)
-                        #_LOGGER.info(f"{(zulutime.day, zulutime.hour, zulutime.minute,)} zulutime={datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()}Z localtime={datetime.fromtimestamp(timestamp).isoformat()} price={price}" )
-                        res['points'][(zulutime.day, zulutime.hour, zulutime.minute,)] = {"price": price, "interval": seconds, "zulutime": datetime.fromtimestamp(timestamp, tz=timezone.utc), "localtime": datetime.fromtimestamp(timestamp)}
-                        if zulutime.day > res['lastday']: res['lastday'] = zulutime.day
-                _LOGGER.info(f"fetched from ecopower: {res}")
-                return res             
-        except Exception as exception:
-            _LOGGER.exception(f"cannot fetch api data from ecopower: {exception}") 
 
 class DynPriceUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the API."""
 
-    def __init__(  self, hass: HomeAssistant, entsoe_client: EntsoeApiClient, ecopower_client: EcopowerApiClient) -> None:
+    def __init__(  self, hass: HomeAssistant, entsoe_client: EntsoeApiClient) -> None:
         """Initialize."""
         self.entsoeapi   = entsoe_client
-        self.ecopowerapi = ecopower_client
         self.platforms = []
         self.lastentsoefetch = 0
-        self.lastecopwrtecht = 0
         self.entsoecache = None
-        self.ecopwrcache_c = None
-        self.ecopwrcache_i = None
         self.entsoelastday = None
-        self.ecopwrlastday = None
         self.cache = None # merged entsoe and ecopower data
         self.lastcheck = 0
 
@@ -211,25 +169,9 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                             self.entsoecache = res1['points']
                     except Exception as exception:
                         raise UpdateFailed() from exception
-            if self.ecopowerapi:
-                _LOGGER.info(f"checking if ecopower api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
-                # reduce number of cloud fetches
-                if (not self.ecopwrcache_c) or (not self.ecopwrcache_i) or ((now - self.lastecopwrfetch >= 3600) and (zulutime.tm_hour >= 12) and (self.ecopwrlastday <= zulutime.tm_mday)):
-                    try:
-                        res2 = await self.ecopowerapi.async_get_data(url = ECOPWR_DAYAHEAD_URL.format(CURVE=ECOPWR_CONSUMPTION))
-                        if res2:
-                            #self.lastecopwrfetch = now
-                            #self.ecopwrlastday = res2['lastday']
-                            self.ecopwrcache_c = res2['points']
-                        res3 = await self.ecopowerapi.async_get_data(url = ECOPWR_DAYAHEAD_URL.format(CURVE=ECOPWR_INJECTION))
-                        if res3:
-                            self.lastecopwrfetch = now
-                            self.ecopwrlastday = res3['lastday']
-                            self.ecopwrcache_i = res3['points']
-                    except Exception as exception:
-                        raise UpdateFailed() from exception
+
         # return combined cache dictionaries
-        return {'entsoe': self.entsoecache, 'ecopower_consumption': self.ecopwrcache_c, 'ecopower_injection': self.ecopwrcache_i}
+        return {'entsoe': self.entsoecache, }
 
 
 

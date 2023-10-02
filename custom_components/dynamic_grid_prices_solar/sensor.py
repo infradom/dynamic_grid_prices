@@ -15,8 +15,8 @@ from datetime import datetime, timezone, timedelta
 from homeassistant.const import (DEVICE_CLASS_MONETARY,)
 from .const import NAME, VERSION, ATTRIBUTION
 from .const import DEFAULT_NAME, DOMAIN, ICON, SENSOR
-from .const import CONF_ENTSOE_TOKEN, CONF_ECOPWR_TOKEN
 from .const import PEAKHOURS, OFFPEAKHOURS1, OFFPEAKHOURS2
+from .const import CONF_ENTSOE_TOKEN, CONF_ENTSOE_AREA, CONF_ENTSOE_FACTOR_A, CONF_ENTSOE_FACTOR_B, CONF_ENTSOE_FACTOR_C, CONF_ENTSOE_FACTOR_D, CONF_VAT_INJ, CONF_VAT_CONS, CONF_NAME
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,8 +40,9 @@ class DynPriceEntity(CoordinatorEntity):
 class DynPriceSensorDescription(SensorEntityDescription):
     # add additional attributes if applicable
     scale: float = None    # scaling factor 
-    extra: float = None    # scaling factor : result = scale * (value+extra)
-    minus: float = None    # scaling factor : result = scale * (value-minus)
+    extra: float = None    # scaling factor : result = scale * value + extra
+    minus: float = None    # scaling factor : result = scale * value - minus
+    vat:   float = None    # final stcaling: result = value * vat 
     static_value: float = None # fixed static value from config entry
     with_attribs: bool = False # add time series as attributes
     source: str = 'entsoe' # source of information: entsoe or ecopower
@@ -73,9 +74,10 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
 
     def _calc_price(self, price):
         res = price
+        if self.entity_description.scale: res = res * self.entity_description.scale 
         if self.entity_description.extra: res = res + self.entity_description.extra
         if self.entity_description.minus: res = res - self.entity_description.minus
-        if self.entity_description.scale: res = res * self.entity_description.scale 
+        if self.entity_description.vat:   res = res * self.entity_description.vat
         return res
 
 
@@ -170,13 +172,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Setup sensor platform."""
     entities = []
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    name = entry.options[CONF_NAME]
     _LOGGER.info(f"no error - device entry content {dir(entry)} entry_id: {entry.entry_id} data: {entry.data} options: {entry.options} state: {entry.state} source: {entry.source}")
     device_info = { "identifiers": {(DOMAIN,)},   "name" : NAME, }
     # entry.data is a dict that the config flow attributes
-    if entry.data[CONF_ENTSOE_TOKEN]:
+    if entry.options[CONF_ENTSOE_TOKEN]:
         descr = DynPriceSensorDescription( 
-            name="Entsoe Price",
-            key="entsoe_price",
+            name=f"{name} Entsoe Price",
+            key=f"{name}_entsoe_price",
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
             with_attribs = True,
@@ -186,89 +189,82 @@ async def async_setup_entry(hass, entry, async_add_entities):
         entities.append(sensor)
 
         descr = DynPriceSensorDescription( 
-            name="Computed Price Consumption",
-            key="computed price_consumption",
+            name=f"{name} Consumption Price",
+            key=f"{name}_consumption_price",
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_KILO_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
-            scale=entry.data["entsoe_factor_A"],
-            extra=entry.data["entsoe_factor_B"],
+            scale=entry.options[CONF_ENTSOE_FACTOR_A],
+            extra=entry.options[CONF_ENTSOE_FACTOR_B],
+            vat=entry.options[CONF_VAT_CONS],
             with_attribs = True,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
         descr = DynPriceSensorDescription( 
-            name="Computed Price Injection",
-            key="computed_price_injection",
+            name=f"{name} Injection Price",
+            key=f"{name}_injection_price",
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_KILO_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
-            scale=entry.data["entsoe_factor_C"],
-            minus=entry.data["entsoe_factor_D"],
+            scale=entry.options[CONF_ENTSOE_FACTOR_C],
+            minus=entry.options[CONF_ENTSOE_FACTOR_D],
+            vat=entry.options[CONF_VAT_INJ],
             with_attribs = True,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
         descr = DynPriceSensorDescription( 
-            name="Entsoe Factor A Consumption Scale",
-            key="entsoe_factor_a_consumption_scale",
-            static_value = entry.data['entsoe_factor_A'],
+            name=f"{name} Factor A Consumption Scale",
+            key=f"{name}_factor_a_consumption_scale",
+            static_value = entry.options[CONF_ENTSOE_FACTOR_A],
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
         descr = DynPriceSensorDescription( 
-            name="Entsoe Factor B Consumption Extracost",
-            key="entsoe_factor_b_consumption_extracost",
+            name=f"{name} Factor B Consumption Extracost",
+            key=f"{name}_factor_b_consumption_extracost",
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
-            static_value = entry.data["entsoe_factor_B"],
+            static_value = entry.options[CONF_ENTSOE_FACTOR_B],
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
         descr = DynPriceSensorDescription( 
-            name="Entsoe Factor C Production Scale",
-            key="entsoe_factor_c_production_scale",
-            static_value = entry.data["entsoe_factor_C"],
+            name=f"{name} Factor C Production Scale",
+            key=f"{name}_factor_c_production_scale",
+            static_value = entry.options[CONF_ENTSOE_FACTOR_C],
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
-
         descr = DynPriceSensorDescription( 
-            name="Entsoe Factor D Production Extrafee",
-            key="entsoe_factor_d_production_extrafee",
+            name=f"{name} Factor D Production Extrafee",
+            key=f"{name}_factor_d_production_extrafee",
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
-            static_value = entry.data["entsoe_factor_D"],
-        )
-        sensor = DynPriceSensor(coordinator, device_info, descr)
-        entities.append(sensor)
-
-    if entry.data[CONF_ECOPWR_TOKEN]:
-        descr = DynPriceSensorDescription( 
-            name="Ecopower Consumption Price",
-            key="ecopower_consumption_price",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_KILO_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
-            with_attribs = True,
-            scale        = 0.001,
-            source       = "ecopower_consumption",
+            static_value = entry.options[CONF_ENTSOE_FACTOR_D],
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
         descr = DynPriceSensorDescription( 
-            name="Ecopower Injection Price",
-            key="ecopower_injection_price",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_KILO_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
-            with_attribs = True,
-            scale        = 0.001,
-            source       = "ecopower_injection",
+            name=f"{name} VAT scaling factor on injection",
+            key=f"{name}_VAT_scaling_factor_on_injection",
+            static_value = entry.options[CONF_VAT_INJ],
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
+
+        descr = DynPriceSensorDescription( 
+            name=f"{name} VAT scaling factor on consumption",
+            key=f"{name}_VAT_scaling_factor_on_consumption",
+            static_value = entry.options[CONF_VAT_CONS],
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
+
 
     _LOGGER.info(f"coordinator data in setup entry: {coordinator.data}")   
     async_add_entities(entities)

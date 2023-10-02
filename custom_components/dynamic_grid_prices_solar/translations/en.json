@@ -1,0 +1,54 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "parameters for your setup",
+        "data": {
+          "entsoe_token": "Entsoe authentication token (leave empty to skip entsoe)",
+          "entsoe_area": "Entsoe area",
+          "name": "Integration name",
+          "entsoe_factor_A": "Scaling factor consumption A",
+          "entsoe_factor_B": "Additional consumtion fee B",
+          "entsoe_factor_C": "Scaling factor production C",
+          "entsoe_factor_D": "Additional production fee D",
+          "vat_inj": "VAT scaling on injection",
+          "vat_cons": "VAT scaling on consumption"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "cannot connect",
+      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "auth": "Authentication error; Did you provide at least one valid API token?"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "parameters for your setup",
+        "data": {
+          "entsoe_token": "Entsoe authentication token (leave empty to skip entsoe)",
+          "entsoe_area": "Entsoe area",
+          "name": "Integration name",
+          "entsoe_factor_A": "Scaling factor consumption A",
+          "entsoe_factor_B": "Additional consumtion fee B",
+          "entsoe_factor_C": "Scaling factor production C",
+          "entsoe_factor_D": "Additional production fee D",
+          "vat_inj": "VAT scaling on injection",
+          "vat_cons": "VAT scaling on consumption"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "cannot connect",
+      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "auth": "Authentication error; Did you provide at least one valid API token?"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  }
+}
