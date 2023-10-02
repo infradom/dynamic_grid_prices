@@ -28,6 +28,7 @@ A config dialog will be displayed.
 - grid operators may charge different prices than the ones published on entsoe. This integration allows to declare factors A, B, C, D for some customization:
   - consume cost:   Cost = (factor_A * published_price + factor_B) * VAT_scaling_consumption
   - injection fee:  Fee  = (factor_C * published_price - factor_D) * VAT_scaling_injection
+
 Note that depending on the taxation, these simple scaling formulas may not correctly provide the real price in your country. They just allow us to have rough feeling of the consumption and injection price.
 The VAT scaling parameters are entered as 1.06 for 6% VAT
 
