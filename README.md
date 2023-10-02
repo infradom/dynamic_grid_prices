@@ -8,7 +8,7 @@ FOR THE TIME BEING, IT IS INSUFFIIENTLY TESTED
 # This software:
 
 This integration will periodically pull the dynamic grid prices from the https://transparency.entsoe.eu API platform
-I know similar integrations exist, but this one wont need a dependency on node-red. The Nordpool integration is a good alternative, but has no simple options to scale injection and consumption prices.
+I know similar integrations exist, but this one wont need a dependency on node-red. The Nordpool integration is a good alternative, but has no simple options to scale injection and consumption prices. Furtermore, the scaling does not only apply to the main entity state value, but also to the attributes that contain the hourly prices.
 
 
 ## Entsoe data source:
