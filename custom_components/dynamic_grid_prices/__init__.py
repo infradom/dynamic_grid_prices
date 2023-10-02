@@ -160,7 +160,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
             if self.entsoeapi: 
                 _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
                 # reduce number of cloud fetches
-                if not self.entsoecache or ((now - self.lastentsoefetch >= 3600) and (zulutime.tm_hour >= 12) and (self.entsoelastday <= zulutime.tm_mday)):
+                if not self.entsoecache or ((now - self.lastentsoefetch >= 3600) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= zulutime.tm_mday)):
                     try:
                         res1 = await self.entsoeapi.async_get_data()
                         if res1:
