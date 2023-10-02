@@ -2,6 +2,7 @@
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.const import CURRENCY_EURO, ENERGY_KILO_WATT_HOUR, ENERGY_MEGA_WATT_HOUR
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.util import dt
 from dataclasses import dataclass
 from statistics import mean
@@ -218,6 +219,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             name=f"{name} Factor A Consumption Scale",
             key=f"{name}_factor_a_consumption_scale",
             static_value = entry.options[CONF_ENTSOE_FACTOR_A],
+            entity_category = EntityCategory.DIAGNOSTIC,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -228,6 +230,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
             static_value = entry.options[CONF_ENTSOE_FACTOR_B],
+            entity_category = EntityCategory.DIAGNOSTIC,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -236,6 +239,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             name=f"{name} Factor C Production Scale",
             key=f"{name}_factor_c_production_scale",
             static_value = entry.options[CONF_ENTSOE_FACTOR_C],
+            entity_category = EntityCategory.DIAGNOSTIC,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -245,6 +249,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
             device_class = DEVICE_CLASS_MONETARY,
             static_value = entry.options[CONF_ENTSOE_FACTOR_D],
+            entity_category = EntityCategory.DIAGNOSTIC,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -253,6 +258,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             name=f"{name} VAT scaling factor on injection",
             key=f"{name}_VAT_scaling_factor_on_injection",
             static_value = entry.options[CONF_VAT_INJ],
+            entity_category = EntityCategory.DIAGNOSTIC,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -261,6 +267,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             name=f"{name} VAT scaling factor on consumption",
             key=f"{name}_VAT_scaling_factor_on_consumption",
             static_value = entry.options[CONF_VAT_CONS],
+            entity_category = EntityCategory.DIAGNOSTIC,
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
