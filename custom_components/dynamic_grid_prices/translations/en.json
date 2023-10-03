@@ -4,7 +4,7 @@
       "user": {
         "title": "parameters for your setup",
         "data": {
-          "entsoe_token": "Entsoe authentication token (leave empty to skip entsoe)",
+          "entsoe_token": "Entsoe authentication token",
           "entsoe_area": "Entsoe area",
           "name": "Integration name",
           "entsoe_factor_A": "Scaling factor consumption A",
@@ -30,7 +30,7 @@
       "init": {
         "title": "parameters for your setup",
         "data": {
-          "entsoe_token": "Entsoe authentication token (leave empty to skip entsoe)",
+          "entsoe_token": "Entsoe authentication token",
           "entsoe_area": "Entsoe area",
           "name": "Integration name",
           "entsoe_factor_A": "Scaling factor consumption A",
