@@ -12,8 +12,8 @@ I know similar integrations exist, but this one wont need a dependency on node-r
 
 
 ## Entsoe data source:
-If you want to use entsoe as data source, you will need to create a entsoe platform login and request an API token so that the integration can access the day-ahead-prices.
-The Entsoe data source is generic and does not know your power providers markup costs. Extra cost and scaling factors can be applied for both consumption and injection.
+This integration uses entsoe as data source, so you will need to create a entsoe platform login and request an API token so that the integration can access the day-ahead-prices.
+The Entsoe data source is generic and does not know your energy company's markup costs. Extra cost and scaling factors can be applied for both consumption and injection.
 
 
 # Installation
@@ -23,11 +23,13 @@ Then under settings->devices&services, press the 'add integration button', type 
 A config dialog will be displayed.
 
 # Configuration parameters:
-- API authentication token for Entsoe. See https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html#_authentication_and_authorisation for information on how to obtain a token. If you only want to use the Ecopower price, leave this field empty. You must either provide an Entsoe token or an API token or both.
+- name of this integration instance (only tested with the default name for now)
+- API authentication token for Entsoe. See https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html#_authentication_and_authorisation for information on how to obtain a token. 
 - area code (only relevant for entsoe): for Belgium this is 10YBE----------2 (for other areas, see https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html#_areas.
-- grid operators may charge different prices than the ones published on entsoe. This integration allows to declare factors A, B, C, D for some customization:
-  - consume cost:   Cost = (factor_A * published_price + factor_B) * VAT_scaling_consumption
-  - injection fee:  Fee  = (factor_C * published_price - factor_D) * VAT_scaling_injection
+- scaling/adaptation factors for injection and consumption:
+   - grid operators may charge different prices than the ones published on entsoe. This integration allows to declare factors A, B, C, D for some customization:
+    - consume cost:   Cost = (factor_A * published_price + factor_B) * VAT_scaling_consumption
+    - injection fee:  Fee  = (factor_C * published_price - factor_D) * VAT_scaling_injection
 
 Note that depending on the taxation, these simple scaling formulas may not correctly provide the real price in your country. They just allow us to have rough feeling of the consumption and injection price.
 The VAT scaling parameters are entered as 1.06 for 6% VAT
