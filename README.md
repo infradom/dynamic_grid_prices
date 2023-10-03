@@ -3,7 +3,7 @@
 
 
 Work in progress ! 
-FOR THE TIME BEING, IT IS INSUFFIIENTLY TESTED
+Although I am using this software in my installation, FOR THE TIME BEING, IT IS PROBABLY INSUFFIIENTLY TESTED
 
 # This software:
 
