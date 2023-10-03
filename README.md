@@ -1,6 +1,6 @@
 # dynamic_grid_prices
 
-
+Integration for the HomeAssistant platform
 
 Work in progress ! 
 Although I am using this software in my installation, FOR THE TIME BEING, IT IS PROBABLY INSUFFIIENTLY TESTED
