@@ -27,7 +27,7 @@ A config dialog will be displayed.
 - API authentication token for Entsoe. See https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html#_authentication_and_authorisation for information on how to obtain a token. 
 - area code (only relevant for entsoe): for Belgium this is 10YBE----------2 (for other areas, see https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html#_areas.
 - scaling/adaptation factors for injection and consumption:
-   - grid operators may charge different prices than the ones published on entsoe. This integration allows to declare factors A, B, C, D for some customization:
+   - energy companies may charge different prices than the ones published on entsoe. This integration allows to declare factors A, B, C, D and VAT levels to allow for some customization:
     - consume cost:   Cost = (factor_A * published_price + factor_B) * VAT_scaling_consumption
     - injection fee:  Fee  = (factor_C * published_price - factor_D) * VAT_scaling_injection
 
