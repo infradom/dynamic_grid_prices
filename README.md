@@ -8,13 +8,16 @@ Although I am using this software in my installation, FOR THE TIME BEING, IT IS 
 # This software:
 
 This integration will periodically pull the dynamic grid prices from the https://transparency.entsoe.eu API platform.
-I know similar integrations exist, but this one wont need a dependency on node-red. The Nordpool integration is a good alternative, but has no simple options to scale injection and consumption prices. Furtermore, the scaling does not only apply to the main entity state value, but also to the attributes that contain the hourly prices.
+Alternatively, or as a backup source, a Nordpool integration instance can be used as data source.
+I know similar integrations exist, but this one wont need a dependency on node-red. The Nordpool integration is a good alternative, but has no simple options to scale injection and consumption prices in one instance. 
 
 
 ## Entsoe data source:
 This integration uses entsoe as data source, so you will need to create a entsoe platform login and request an API token so that the integration can access the day-ahead-prices.
-The Entsoe data source is generic and does not know your energy company's markup costs. Extra cost and scaling factors can be applied for both consumption and injection.
+The Entsoe data source is generic and does not know your energy company's markup costs. Extra cost and scaling factors can be applied for both consumption and injection.  If you do not want to use Entsoe as data source, leave the API token field empty and select the backup source flag.
 
+## Backup Nordpool data source:
+This integration can use a Nordpool integration instance as backup data source. The Nordpool data souce can even be used as main source if no Entsoe API token is specified. You first need to install the Nordpool integration and configure an instance that expresses the cost in cost/Mwh, as the scaling factors are shared with the Entsoe source.
 
 # Installation
 This custom integration cannot be installed through HACS yet, as we feel it is still too experimental.
