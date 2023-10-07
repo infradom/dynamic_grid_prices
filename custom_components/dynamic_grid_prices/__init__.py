@@ -87,6 +87,8 @@ class EntsoeApiClient:
         self._token   = token
         self._area    = area
         self._session = session
+        self.status  = "Unknown"
+        self.count    = 0
 
     async def async_get_data(self) -> dict:
         #today = datetime.now()               # exceptionally in localtime
@@ -97,10 +99,12 @@ class EntsoeApiClient:
         url = ENTSOE_DAYAHEAD_URL.format(TOKEN = self._token, AREA = self._area, START = start, END = end)
         _LOGGER.info(f"entsoe interval {start} {end} fetchingurl = {url}")
         try:
+            count = 0
             async with async_timeout.timeout(TIMEOUT):
                 response = await self._session.get(url, headers=ENTSOE_HEADERS)
                 if response.status != 200:
                     _LOGGER.error(f'invalid response code from entsoe: {response.status}')
+                    self.status = f"Error: response code: {response.status}"
                     return None
                 xml = await response.text()
                 xpars = xmltodict.parse(xml)
@@ -111,6 +115,7 @@ class EntsoeApiClient:
                 if isinstance(series, Mapping): series = [series]
                 res = { 'lastday' : 0, 'points': {} }
                 #res = {}
+                count = 0
                 for ts in series:
                     start = ts['Period']['timeInterval']['start']
                     startts = datetime.strptime(start,'%Y-%m-%dT%H:%MZ').replace(tzinfo=timezone.utc).timestamp()
@@ -118,6 +123,7 @@ class EntsoeApiClient:
                     if ts['Period']['resolution'] == 'PT60M': seconds = 3600
                     else: seconds = None
                     for point in ts['Period']['Point']:
+                        count = count + 1
                         offset = seconds * (int(point['position'])-1)
                         timestamp = startts + offset
                         zulutime  = datetime.fromtimestamp(timestamp, tz=timezone.utc)
@@ -127,8 +133,11 @@ class EntsoeApiClient:
                         res['points'][(zulutime.day, zulutime.hour, zulutime.minute,)] = {"price": price, "interval": seconds, "zulutime":  datetime.fromtimestamp(timestamp, tz=timezone.utc), "localtime": datetime.fromtimestamp(timestamp)}
                         if zulutime.day > res['lastday']: res['lastday'] = zulutime.day
                 _LOGGER.info(f"fetched from entsoe: {res}")
+                self.status = "OK"
+                self.count = count
                 return res             
         except Exception as exception:
+            self.status = f"Error: {exception}"
             _LOGGER.exception(f"cannot fetch api data from entsoe: {exception}") 
 
 
@@ -144,7 +153,8 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
         self.lastentsoefetch = 0
         self.lastbackupfetch = 0
         self.entsoecache = None
-        self.entsoelastday = None
+        self.entsoelastday = 0
+        self.backuplastday = 0
         self.cache = None # merged entsoe and ecopower data
         self.backupcache = None # nordpol data
         self.lastcheck = 0
@@ -154,6 +164,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
         self.hass = hass
         self.entry = entry
         self.cyclecount = 0
+        self.statusdata = {}
         if self.entsoeapi: self.sources.append("entsoe")
         if self.backupenabled and self.backupentity: self.sources.append("backup")
 
@@ -168,32 +179,38 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
 
         if (slot > self.lastcheck) or (self.backupenabled and self.backupentity and not self.backupcache) : # do nothing unless we are in a new time slot
             self.lastcheck = slot 
-            
             if self.entsoeapi: 
                 _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
                 # reduce number of cloud fetches
                 if not self.entsoecache or ((now - self.lastentsoefetch >= 3600) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= zulutime.tm_mday)):
+                    entsoecount = 0
+                    entsoestatus = "Unknown"
                     try:
                         res1 = await self.entsoeapi.async_get_data()
                         if res1:
                             self.lastfetch = now
                             self.entsoelastday = res1['lastday']
                             self.entsoecache = res1['points']
+                            entsoestatus = self.entsoeapi.status
+                            entsoecount = self.entsoeapi.count
                     except Exception as exception:
+                        entsoestatus = f"Error: {exception}"
                         raise UpdateFailed() from exception
-
+                    self.statusdata["entsoestatus"] = entsoestatus
+                    self.statusdata["entsoecount"]  = entsoecount
             if self.backupenabled and self.backupentity: # fetch nordpool style data
                 if (not self.backupcache) or ((now - self.lastbackupfetch >= 3600) and (zulutime.tm_hour >= 11) and (self.backuplastday <= zulutime.tm_mday)):
                     backupstate = self.hass.states.get(self.backupentity)
                     if backupstate:
                         day = 0
                         self.backupcache   = {}
-
+                        count = 0
                         for inday in ['raw_today', 'raw_tomorrow']:
                             backupdata = backupstate.attributes[inday] 
                             for val in backupdata:
                                 value = val['value']
                                 if value:
+                                    count = count + 1
                                     localstart = val['start']
                                     zulustart = val['start'].astimezone(pytz.utc)
 
@@ -201,12 +218,12 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     hour = zulustart.hour
                                     minute = zulustart.minute
                                     interval = 3600
-
                                     self.backupcache[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
-
-                        self.lastbackupfetch = now
-                        self.backuplastday = day
-
+                        self.statusdata["backupstatus"] = "OK"
+                        self.statusdata["backupcount"]  = count
+                        lastbackupfetch = now
+                        backuplastday = day
+            
         # return combined cache dictionaries
         return {'entsoe': self.entsoecache,
                 'backup': self.backupcache }

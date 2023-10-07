@@ -45,8 +45,9 @@ class DynPriceSensorDescription(SensorEntityDescription):
     extra: float = None    # scaling factor : result = scale * value + extra
     minus: float = None    # scaling factor : result = scale * value - minus
     vat:   float = None    # final stcaling: result = value * vat 
-    static_value: float = None # fixed static value from config entry
-    with_attribs: bool = False # add time series as attributes
+    static_value:  float = None # fixed static value from config entry
+    with_attribs:   bool = False # add time series as attributes
+    statusdata:     str = None # string containing name of statusdata field
     source: str = None # source of information: entsoe or 'backup' or 'any'
 
 
@@ -59,6 +60,9 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
         self.entity_description: DynPriceSensorDescription = description
         self._attr_device_info = device_info
         self._platform_name = 'sensor'
+        self.count_entsoe = 0
+        self.count_backup = 0
+        self.count_any    = 0
         """self._value = value # typically a static value from config entry
         self._scale = scale # scaling factor 
         self._extro = extra # extra cost"""
@@ -90,8 +94,12 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
 
     @property
     def native_value(self):
+        error  = None
+        error1 = None
+        error2 = None
         """Return the native value of the sensor."""
-        if self.entity_description.static_value: return self.entity_description.static_value # static config variable
+        if   self.entity_description.static_value: return self.entity_description.static_value # static config variable
+        elif self.entity_description.statusdata:   return self.coordinator.statusdata.get(self.entity_description.statusdata)
         else:
             #_LOGGER.error(f"no error - coordinator data in sensor native value: {self.coordinator.data}")
             now = datetime.utcnow()
@@ -114,7 +122,9 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     if self.coordinator.data[firstsource]: rec = self.coordinator.data[firstsource].get((nowday, nowhour, 0,) , None)
                     if rec: firstprice = rec["price"]
                     else: 
-                        if self.coordinator.cyclecount > 6: _LOGGER.warning(f"no data from {firstsource} for now: day={nowday} hour={nowhour}")
+                        if self.coordinator.cyclecount > 6:
+                            error1 = f"Warning: no data from {firstsource} for now: day={nowday} hour={nowhour}"
+                            _LOGGER.warning(erro1)
 
                 if len(sources) > 1:
                     nextsource = sources[1]
@@ -122,13 +132,19 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     if self.coordinator.data[nextsource]: rec = self.coordinator.data[nextsource].get((nowday, nowhour, 0,) , None)
                     if rec: nextprice = rec["price"]
                     else: 
-                        if self.coordinator.cyclecount > 6: _LOGGER.warning(f"no data from {nextsource} for now: day={nowday} hour={nowhour}")
+                        if self.coordinator.cyclecount > 6: 
+                            error2 = f"Warning: no data from {nextsource} for now: day={nowday} hour={nowhour}"
+                            _LOGGER.warning(error2)
 
                 if (firstprice != None) and (nextprice != None) and abs(firstprice - nextprice) > PRECISION: 
-                    _LOGGER.warning(f"main and backup source return different data - using max of {firstsource}: {firstprice}, {nextsource}: {nextprice}")
+                    error = f"Error: sources inconsistent {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                    _LOGGER.warning(error)
                     price = max(firstprice, nextprice)
                 elif (firstprice == None) and (nextprice != None): price = nextprice
                 else: price = firstprice
+            if error  and not self.coordinator["mergestatus"]: self.coordinator["mergestatus"] = error
+            if error1 and not self.coordinator[f"{firstsource}status"]: self.coordinator[f"{firstsource}status"] = error1
+            if error2 and not self.coordinator[f"{nextsource}status"]:  self.coordinator[f"{nextsource}status"]  = error2
             return self._calc_price(price)
 
 
@@ -150,11 +166,13 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
             raw_today = []
             today = []
             self._attrs = {}
+            error_count = 0
+            count = 0
             if self.coordinator.data: # probably useless teest
                 source = self.entity_description.source
                 if source == "any": sources = self.coordinator.sources
                 else: sources = [source]
-                #_LOGGER.warning(f"sources: {sources}")
+                error  = None
                 firstprice = {}
                 nextprice  = {}
                 if len(sources) > 0:
@@ -178,15 +196,17 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                 for (day, hour, minute,), nextvalue in nextprice.items(): # merge into firstprice
                     firstvalue = firstprice.get((day, hour, minute,), None)
                     if (firstvalue.get("price") != None) and (nextvalue.get("price") != None) and  abs(nextvalue["price"] - firstvalue["price"]) > PRECISION:
-                        _LOGGER.warning(f"main and backup return different day/hour data {day}/{hour} - using max of {firstsource}: {firstvalue}, {nextsource}: {nextvalue}")
+                        error = f"Error: sources inconsistent day/hour data {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                        _LOGGER.warning(error)
+                        error_count = error_count + 1
                         firstprice[(day, hour, minute,)]["price"] = max(firstvalue["price"], nextvalue["price"])
                     elif (firstvalue == None) and (nextvalue != None): firstprice[(day, hour, minute,)] = nextvalue
 
                 #_LOGGER.warning(f"firstprice merged {source}: {firstprice}")
-
                 for (day, hour, minute,), value in firstprice.items(): # scan merged items
                     price = value["price"]
                     if price != None:  
+                        count = count + 1
                         if price < thismin: thismin = price
                         if price > thismax: thismax = price
                         zulutime = value["zulutime"]
@@ -198,6 +218,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                         if localtime.hour in OFFPEAKHOURS2: off_peak_2.append(price)
                         today.append(price)
                         raw_today.append( {"start": localtime, "end": localtime + timedelta(seconds=interval) , "value": price } )
+                if not error: error = f"OK"
 
                 if len(today) > 0: self._attrs = { 
                         'current_price': self.native_value,
@@ -218,6 +239,8 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                         'raw_today': raw_today,
                         #'raw_tomorrow': raw_tomorrow,
                     }
+            self.coordinator.statusdata["mergecount"] = count - error_count
+            if error  and not self.coordinator.statusdata.get("mergestatus"): self.coordinator.statusdata["mergestatus"] = error
             return self._attrs
         else: return None    
 
@@ -242,7 +265,27 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
-    
+        
+        descr = DynPriceSensorDescription( 
+            name=f"{name} entsoe data quality",
+            key=f"{name}_entsoe_data_quality",
+            source = "entsoe",
+            entity_category = EntityCategory.DIAGNOSTIC,
+            statusdata = "entsoestatus",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
+        
+        descr = DynPriceSensorDescription( 
+            name=f"{name} entsoe data count",
+            key=f"{name}_entsoe_data_count",
+            source = "entsoe",
+            entity_category = EntityCategory.DIAGNOSTIC,
+            statusdata = "entsoecount",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
+
     if entry.options[CONF_BACKUP] and entry.options[CONF_BACKUP_SOURCE]:
         descr = DynPriceSensorDescription( 
             name=f"{name} Backup Price",
@@ -255,6 +298,25 @@ async def async_setup_entry(hass, entry, async_add_entities):
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
+        descr = DynPriceSensorDescription( 
+            name=f"{name} backup data quality",
+            key=f"{name}_backup_data_quality",
+            source = "backup",
+            entity_category = EntityCategory.DIAGNOSTIC,
+            statusdata = "backupstatus",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
+
+        descr = DynPriceSensorDescription( 
+            name=f"{name} backup data count",
+            key=f"{name}_backup_data_count",
+            source = "backup",
+            entity_category = EntityCategory.DIAGNOSTIC,
+            statusdata = "backupcount",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
     if True:
         descr = DynPriceSensorDescription( 
             name=f"{name} Consumption Price",
@@ -342,6 +404,25 @@ async def async_setup_entry(hass, entry, async_add_entities):
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
 
+        descr = DynPriceSensorDescription( 
+            name=f"{name} data merge quality",
+            key=f"{name}_data_merge_quality",
+            source = "any",
+            entity_category = EntityCategory.DIAGNOSTIC,
+            statusdata = "mergestatus",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
+
+        descr = DynPriceSensorDescription( 
+            name=f"{name} data merge count",
+            key=f"{name}_data_merge_count",
+            source = "any",
+            entity_category = EntityCategory.DIAGNOSTIC,
+            statusdata = "mergecount",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
 
     _LOGGER.info(f"coordinator data in setup entry: {coordinator.data}")   
     async_add_entities(entities)
