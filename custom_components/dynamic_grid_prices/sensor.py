@@ -17,12 +17,13 @@ from homeassistant.const import (DEVICE_CLASS_MONETARY,)
 from .const import NAME, VERSION, ATTRIBUTION
 from .const import DEFAULT_NAME, DOMAIN, ICON, SENSOR
 from .const import PEAKHOURS, OFFPEAKHOURS1, OFFPEAKHOURS2
-from .const import CONF_ENTSOE_TOKEN, CONF_ENTSOE_AREA, CONF_ENTSOE_FACTOR_A, CONF_ENTSOE_FACTOR_B, CONF_ENTSOE_FACTOR_C, CONF_ENTSOE_FACTOR_D, CONF_VAT_INJ, CONF_VAT_CONS, CONF_NAME
+from .const import CONF_ENTSOE_TOKEN, CONF_ENTSOE_AREA, CONF_ENTSOE_FACTOR_A, CONF_ENTSOE_FACTOR_B, CONF_ENTSOE_FACTOR_C, CONF_ENTSOE_FACTOR_D, CONF_VAT_INJ, CONF_VAT_CONS
+from .const import CONF_NAME, CONF_BACKUP_SOURCE, CONF_BACKUP
 import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-
+PRECISION = 0.001
 
 class DynPriceEntity(CoordinatorEntity):
     def __init__(self, coordinator): #, id):
@@ -46,7 +47,7 @@ class DynPriceSensorDescription(SensorEntityDescription):
     vat:   float = None    # final stcaling: result = value * vat 
     static_value: float = None # fixed static value from config entry
     with_attribs: bool = False # add time series as attributes
-    source: str = 'entsoe' # source of information: entsoe or ecopower
+    source: str = None # source of information: entsoe or 'backup' or 'any'
 
 
 
@@ -82,6 +83,11 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
         return res
 
 
+    def _calc_price_rec(self, rec):
+        rec['price'] = self._calc_price(rec["price"])
+        return rec
+
+
     @property
     def native_value(self):
         """Return the native value of the sensor."""
@@ -93,13 +99,38 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
             nextday = (now + timedelta(days=1)).day
             nowhour = now.hour
             rec = None
-            if self.coordinator.data: 
-                try:  rec = self.coordinator.data[self.entity_description.source].get((nowday, nowhour, 0,) , None)
-                except:
-                    if self.coordinator.data[self.entity_description.source] != None: _LOGGER.error(f"cannot find {(searchday, searchhour), } data for {self.entity_description.source} : {self.coordinator.data}")
-            #_LOGGER.error(f"no error - day = {searchday} hour = {searchhour} price = {rec}")
-            if rec: return self._calc_price( rec["price"] )
-            else:   return None
+            prices = {} 
+            if self.coordinator.data:
+                source = self.entity_description.source
+                if source == "any": sources = self.coordinator.sources
+                else: sources = [source]  
+                
+                firstprice = None 
+                nextprice  = None
+                if len(sources) > 0:
+                    firstsource = sources[0]
+                    rec = None
+                    #_LOGGER.warning(f"firstsource {firstsource} data : {self.coordinator.data}")
+                    if self.coordinator.data[firstsource]: rec = self.coordinator.data[firstsource].get((nowday, nowhour, 0,) , None)
+                    if rec: firstprice = rec["price"]
+                    else: 
+                        if self.coordinator.cyclecount > 6: _LOGGER.warning(f"no data from {firstsource} for now: day={nowday} hour={nowhour}")
+
+                if len(sources) > 1:
+                    nextsource = sources[1]
+                    rec = None
+                    if self.coordinator.data[nextsource]: rec = self.coordinator.data[nextsource].get((nowday, nowhour, 0,) , None)
+                    if rec: nextprice = rec["price"]
+                    else: 
+                        if self.coordinator.cyclecount > 6: _LOGGER.warning(f"no data from {nextsource} for now: day={nowday} hour={nowhour}")
+
+                if (firstprice != None) and (nextprice != None) and abs(firstprice - nextprice) > PRECISION: 
+                    _LOGGER.warning(f"main and backup source return different data - using max of {firstsource}: {firstprice}, {nextsource}: {nextprice}")
+                    price = max(firstprice, nextprice)
+                elif (firstprice == None) and (nextprice != None): price = nextprice
+                else: price = firstprice
+            return self._calc_price(price)
+
 
     
     @property
@@ -108,63 +139,86 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
         if self.entity_description.with_attribs:
             localday = datetime.now().day
             #localtomorrow = (datetime.now() + timedelta(days=1)).day
-            if self.coordinator.data[self.entity_description.source]:
-                thismin = 9999
-                thismax = -9999
-                today = []
-                #tomorrow = []
-                raw_today = []
-                #raw_tomorrow = []
-                peak = []
-                off_peak_1 = []
-                off_peak_2 = []
-                for (day, hour, minute,), value in self.coordinator.data[self.entity_description.source].items():
-                    price = self._calc_price(value["price"])
-                    if price < thismin: thismin = price
-                    if price > thismax: thismax = price
-                    zulutime = value["zulutime"]
-                    localtime = dt.as_local( value["localtime"] )
-                    interval = value["interval"]
-                    #if localtime.day == localday:
-                    if True: # cleanup later
-                        today.append(price)
+
+            thismin = 9999
+            thismax = -9999
+            #raw_today[source] = []
+            #today[source] = []
+            peak = []
+            off_peak_1 = []
+            off_peak_2 = []
+            raw_today = []
+            today = []
+            self._attrs = {}
+            if self.coordinator.data: # probably useless teest
+                source = self.entity_description.source
+                if source == "any": sources = self.coordinator.sources
+                else: sources = [source]
+                #_LOGGER.warning(f"sources: {sources}")
+                firstprice = {}
+                nextprice  = {}
+                if len(sources) > 0:
+                    firstsource = sources[0]
+                    #_LOGGER.warning(f"firstsource {firstsource} data : {self.coordinator.data}")
+                    if self.coordinator.data[firstsource]: 
+                        for (day, hour, minute,), rec in self.coordinator.data[firstsource].items():
+                            newrec = rec.copy()
+                            newrec["price"] = self._calc_price(rec["price"])
+                            firstprice[(day, hour, minute,)] = newrec
+                    #_LOGGER.warning(f"firstprice: {firstsource} {firstprice}")
+                if len(sources) > 1:
+                    nextsource = sources[1]
+                    if self.coordinator.data[nextsource]:
+                        for (day, hour, minute,), rec in self.coordinator.data[nextsource].items():
+                            newrec = rec.copy()
+                            newrec["price"] = self._calc_price(rec["price"])
+                            nextprice[(day, hour, minute,)] = newrec
+                    #_LOGGER.warning(f"nextprice: {nextsource} {nextprice}")
+
+                for (day, hour, minute,), nextvalue in nextprice.items(): # merge into firstprice
+                    firstvalue = firstprice.get((day, hour, minute,), None)
+                    if (firstvalue.get("price") != None) and (nextvalue.get("price") != None) and  abs(nextvalue["price"] - firstvalue["price"]) > PRECISION:
+                        _LOGGER.warning(f"main and backup return different day/hour data {day}/{hour} - using max of {firstsource}: {firstvalue}, {nextsource}: {nextvalue}")
+                        firstprice[(day, hour, minute,)]["price"] = max(firstvalue["price"], nextvalue["price"])
+                    elif (firstvalue == None) and (nextvalue != None): firstprice[(day, hour, minute,)] = nextvalue
+
+                #_LOGGER.warning(f"firstprice merged {source}: {firstprice}")
+
+                for (day, hour, minute,), value in firstprice.items(): # scan merged items
+                    price = value["price"]
+                    if price != None:  
+                        if price < thismin: thismin = price
+                        if price > thismax: thismax = price
+                        zulutime = value["zulutime"]
+                        localtime = dt.as_local( value["localtime"] )
+                        interval = value["interval"]
+
                         if localtime.hour in PEAKHOURS: peak.append(price)
                         if localtime.hour in OFFPEAKHOURS1: off_peak_1.append(price)
                         if localtime.hour in OFFPEAKHOURS2: off_peak_2.append(price)
+                        today.append(price)
                         raw_today.append( {"start": localtime, "end": localtime + timedelta(seconds=interval) , "value": price } )
-                    #elif localtime.day == localtomorrow:
-                    #    tomorrow.append(price)
-                    #    raw_tomorrow.append( {"start": localtime, "end": localtime + timedelta(seconds=interval) , "value": price} )
-                self._attrs = { 
-                    'current_price': self.native_value,
-                    'average': mean(today),
-                    'off_peak_1': mean(off_peak_1) if off_peak_1 else 0,
-                    'off_peak_2': mean(off_peak_2) if off_peak_2 else 0,
-                    'peak': mean(peak) if peak else 0,
-                    'min': thismin,
-                    'max': thismax,
-                    'unit':  {ENERGY_KILO_WATT_HOUR},
-                    'currency' : CURRENCY_EURO,
-                    'country': None,
-                    'region': 'BE',
-                    'low_price': False,
-                    #'tomorrow_valid': False,
-                    'today': today,
-                    #'tomorrow': tomorrow,
-                    'raw_today': raw_today,
-                    #'raw_tomorrow': raw_tomorrow,
-                }
-                return self._attrs
-                """
-                for (day, hour, minute,), value in self.coordinator.data[self.entity_description.source].items():
-                    price = value["price"]
-                    zulutime = value["zulutime"]
-                    localtime = value["localtime"]
-                    if   localtime.day == localday: patt = f"price_{localtime.hour:02}h"
-                    elif localtime.day == localtomorrow: patt = f"price_next_day_{localtime.hour:02}h"
-                    else: patt = None
-                    if patt: self._attrs[patt] = price
-                return self._attrs"""
+
+                if len(today) > 0: self._attrs = { 
+                        'current_price': self.native_value,
+                        'average': mean(today),
+                        'off_peak_1': mean(off_peak_1) if off_peak_1 else 0,
+                        'off_peak_2': mean(off_peak_2) if off_peak_2 else 0,
+                        'peak': mean(peak) if peak else 0,
+                        'min': thismin,
+                        'max': thismax,
+                        'unit':  {ENERGY_KILO_WATT_HOUR},
+                        'currency' : CURRENCY_EURO,
+                        'country': None,
+                        'region': 'BE',
+                        'low_price': False,
+                        #'tomorrow_valid': False,
+                        'today': today,
+                        #'tomorrow': tomorrow,
+                        'raw_today': raw_today,
+                        #'raw_tomorrow': raw_tomorrow,
+                    }
+            return self._attrs
         else: return None    
 
 
@@ -188,7 +242,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
+    
+    if entry.options[CONF_BACKUP] and entry.options[CONF_BACKUP_SOURCE]:
+        descr = DynPriceSensorDescription( 
+            name=f"{name} Backup Price",
+            key=f"{name}_backup_price",
+            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
+            device_class = DEVICE_CLASS_MONETARY,
+            with_attribs = True,
+            source       = "backup",
+        )
+        sensor = DynPriceSensor(coordinator, device_info, descr)
+        entities.append(sensor)
 
+    if True:
         descr = DynPriceSensorDescription( 
             name=f"{name} Consumption Price",
             key=f"{name}_consumption_price",
@@ -198,6 +265,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             extra=entry.options[CONF_ENTSOE_FACTOR_B],
             vat=entry.options[CONF_VAT_CONS],
             with_attribs = True,
+            source = "any",
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -211,6 +279,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             minus=entry.options[CONF_ENTSOE_FACTOR_D],
             vat=entry.options[CONF_VAT_INJ],
             with_attribs = True,
+            source = "any"
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
@@ -243,6 +312,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
         sensor = DynPriceSensor(coordinator, device_info, descr)
         entities.append(sensor)
+
         descr = DynPriceSensorDescription( 
             name=f"{name} Factor D Production Extrafee",
             key=f"{name}_factor_d_production_extrafee",

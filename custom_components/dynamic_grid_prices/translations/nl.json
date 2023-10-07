@@ -12,7 +12,14 @@
           "entsoe_factor_C": "Scaling factor production C",
           "entsoe_factor_D": "Additional production fee D",
           "vat_inj": "VAT scaling on injection",
-          "vat_cons": "VAT scaling on consumption"
+          "vat_cons": "VAT scaling on consumption",
+          "backup_flag": "Use backup entity"
+        }
+      },
+      "backup": {
+        "title": "Backup Nordpool entity",
+        "data": {
+          "backup_source": "Entity that can serve as backup source of data. eg. sensor.nordpool_mwh_be_eur..."
         }
       }
     },
@@ -38,7 +45,14 @@
           "entsoe_factor_C": "Scaling factor production C",
           "entsoe_factor_D": "Additional production fee D",
           "vat_inj": "VAT scaling on injection",
-          "vat_cons": "VAT scaling on consumption"
+          "vat_cons": "VAT scaling on consumption",
+          "backup_flag": "Use backup entity"
+        }
+      },
+      "backup": {
+        "title": "Backup Nordpool entity",
+        "data": {
+          "backup_source": "Entity that can serve as backup source of data. eg. sensor.nordpool_mwh_be_eur..."
         }
       }
     },

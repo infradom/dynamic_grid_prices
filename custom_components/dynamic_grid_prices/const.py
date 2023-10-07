@@ -14,7 +14,7 @@ NAME = "DynGridPrices"
 DEFAULT_NAME = "Dynamic_grid_prices"
 DOMAIN = "dynamic_grid_prices"
 DOMAIN_DATA = f"{DOMAIN}_data"
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 ISSUE_URL = "https://github.com/infradom/dynamic_grid_prices_solar/issues"
 
 PEAKHOURS = range(8,20)
@@ -41,6 +41,8 @@ CONF_ENTSOE_FACTOR_D = "entsoe_factor_D"
 CONF_VAT_INJ         = "vat_inj"
 CONF_VAT_CONS        = "vat_cons" 
 CONF_NAME            = "name"
+CONF_BACKUP          = "backup_flag"
+CONF_BACKUP_SOURCE   = "backup_source"
 
 DEFAULT_FACTOR_A = 0.001 * 1.02      # consumption price scale to kWh
 DEFAULT_FACTOR_B = 0.004 + 0.0378329 + 0.0019 + 0.0475+ +0.0165 + 0.0028 # consumption price extra per kWh, see your electricity bill

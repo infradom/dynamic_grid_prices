@@ -13,9 +13,9 @@ import xmltodict
 import json
 import logging
 from datetime import datetime, timezone, timedelta
-import time
+import time, pytz
 from collections.abc import Mapping
-from .const import ENTSOE_DAYAHEAD_URL, ENTSOE_HEADERS,STARTUP_MESSAGE, CONF_ENTSOE_AREA, CONF_ENTSOE_TOKEN
+from .const import ENTSOE_DAYAHEAD_URL, ENTSOE_HEADERS,STARTUP_MESSAGE, CONF_ENTSOE_AREA, CONF_ENTSOE_TOKEN, CONF_BACKUP_SOURCE, CONF_BACKUP
 from .const import DOMAIN, PLATFORMS, SENSOR
 
 # TODO List the platforms that you want to support.
@@ -46,8 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entsoe_session = async_get_clientsession(hass)
         entsoe_client = EntsoeApiClient(entsoe_session, entsoe_token, area)
 
-
-    coordinator = DynPriceUpdateCoordinator(hass, entsoe_client= entsoe_client)
+    coordinator = DynPriceUpdateCoordinator(hass, entsoe_client= entsoe_client, entry = entry)
     await coordinator.async_refresh()
 
     if not coordinator.last_update_success:
@@ -138,15 +137,25 @@ class EntsoeApiClient:
 class DynPriceUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the API."""
 
-    def __init__(  self, hass: HomeAssistant, entsoe_client: EntsoeApiClient) -> None:
+    def __init__(  self, hass: HomeAssistant, entsoe_client: EntsoeApiClient, entry: ConfigEntry) -> None:
         """Initialize."""
         self.entsoeapi   = entsoe_client
         self.platforms = []
         self.lastentsoefetch = 0
+        self.lastbackupfetch = 0
         self.entsoecache = None
         self.entsoelastday = None
         self.cache = None # merged entsoe and ecopower data
+        self.backupcache = None # nordpol data
         self.lastcheck = 0
+        self.backupenabled = entry.options.get(CONF_BACKUP)
+        self.backupentity = entry.options.get(CONF_BACKUP_SOURCE)
+        self.sources = []
+        self.hass = hass
+        self.entry = entry
+        self.cyclecount = 0
+        if self.entsoeapi: self.sources.append("entsoe")
+        if self.backupenabled and self.backupentity: self.sources.append("backup")
 
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
 
@@ -154,9 +163,12 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
         """Update data via library."""
         now = time.time()
         zulutime = time.gmtime(now)
+        self.cyclecount = self.cyclecount+1
         slot = int(now)//UPDATE_INTERVAL # integer division in python3.x
-        if slot > self.lastcheck: # do nothing unless we are in a new time slot
+
+        if (slot > self.lastcheck) or (self.backupenabled and self.backupentity and not self.backupcache) : # do nothing unless we are in a new time slot
             self.lastcheck = slot 
+            
             if self.entsoeapi: 
                 _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
                 # reduce number of cloud fetches
@@ -170,8 +182,34 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                     except Exception as exception:
                         raise UpdateFailed() from exception
 
+            if self.backupenabled and self.backupentity: # fetch nordpool style data
+                if (not self.backupcache) or ((now - self.lastbackupfetch >= 3600) and (zulutime.tm_hour >= 11) and (self.backuplastday <= zulutime.tm_mday)):
+                    backupstate = self.hass.states.get(self.backupentity)
+                    if backupstate:
+                        day = 0
+                        self.backupcache   = {}
+
+                        for inday in ['raw_today', 'raw_tomorrow']:
+                            backupdata = backupstate.attributes[inday] 
+                            for val in backupdata:
+                                value = val['value']
+                                if value:
+                                    localstart = val['start']
+                                    zulustart = val['start'].astimezone(pytz.utc)
+
+                                    day = zulustart.day
+                                    hour = zulustart.hour
+                                    minute = zulustart.minute
+                                    interval = 3600
+
+                                    self.backupcache[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
+
+                        self.lastbackupfetch = now
+                        self.backuplastday = day
+
         # return combined cache dictionaries
-        return {'entsoe': self.entsoecache, }
+        return {'entsoe': self.entsoecache,
+                'backup': self.backupcache }
 
 
 
