@@ -124,7 +124,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     else: 
                         if self.coordinator.cyclecount > 6:
                             error1 = f"Warning: no data from {firstsource} for now: day={nowday} hour={nowhour}"
-                            _LOGGER.warning(erro1)
+                            _LOGGER.warning(error1)
 
                 if len(sources) > 1:
                     nextsource = sources[1]
