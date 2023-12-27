@@ -197,7 +197,8 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     firstvalue = firstprice.get((day, hour, minute,), None)
                     if (firstvalue.get("price") != None) and (nextvalue.get("price") != None) and  abs(nextvalue["price"] - firstvalue["price"]) > PRECISION:
                         error = f"Error: sources inconsistent day/hour data {firstsource}: {firstprice}, {nextsource}: {nextprice}"
-                        _LOGGER.warning(error)
+                        if error_count < 3: _LOGGER.warning(error)
+                        else:_LOGGER.debug(error)
                         error_count = error_count + 1
                         firstprice[(day, hour, minute,)]["price"] = max(firstvalue["price"], nextvalue["price"])
                     elif (firstvalue == None) and (nextvalue != None): firstprice[(day, hour, minute,)] = nextvalue
