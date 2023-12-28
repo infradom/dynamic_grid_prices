@@ -241,6 +241,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                         #'raw_tomorrow': raw_tomorrow,
                     }
             self.coordinator.statusdata["mergecount"] = count - error_count
+            self.coordinator.merge_errorcount = error_count
             if error  and not self.coordinator.statusdata.get("mergestatus"): self.coordinator.statusdata["mergestatus"] = error
             return self._attrs
         else: return None    

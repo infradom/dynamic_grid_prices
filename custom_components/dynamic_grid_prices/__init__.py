@@ -165,6 +165,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.cyclecount = 0
         self.statusdata = {}
+        self.merge_errorcount = 0
         if self.entsoeapi: self.sources.append("entsoe")
         if self.backupenabled and self.backupentity: self.sources.append("backup")
 
@@ -179,10 +180,11 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
 
         if (slot > self.lastcheck) or (self.backupenabled and self.backupentity and not self.backupcache) : # do nothing unless we are in a new time slot
             self.lastcheck = slot 
+            retry = (self.merge_errorcount > 0)
             if self.entsoeapi: 
                 _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
                 # reduce number of cloud fetches
-                if not self.entsoecache or ((now - self.lastentsoefetch >= 3600) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= zulutime.tm_mday)):
+                if (not self.entsoecache) or retry or ((now - self.lastentsoefetch >= 3600) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= zulutime.tm_mday)):
                     entsoecount = 0
                     entsoestatus = "Unknown"
                     try:
@@ -193,13 +195,14 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                             self.entsoecache = res1['points']
                             entsoestatus = self.entsoeapi.status
                             entsoecount = self.entsoeapi.count
+                            self.merge_errorcount = 0 # reset
                     except Exception as exception:
                         entsoestatus = f"Error: {exception}"
                         raise UpdateFailed() from exception
                     self.statusdata["entsoestatus"] = entsoestatus
                     self.statusdata["entsoecount"]  = entsoecount
             if self.backupenabled and self.backupentity: # fetch nordpool style data
-                if (not self.backupcache) or ((now - self.lastbackupfetch >= 3600) and (zulutime.tm_hour >= 11) and (self.backuplastday <= zulutime.tm_mday)):
+                if (not self.backupcache) or retry or ((now - self.lastbackupfetch >= 3600) and (zulutime.tm_hour >= 11) and (self.backuplastday <= zulutime.tm_mday)):
                     backupstate = self.hass.states.get(self.backupentity)
                     if backupstate:
                         day = 0
@@ -221,6 +224,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     self.backupcache[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
                         self.statusdata["backupstatus"] = "OK"
                         self.statusdata["backupcount"]  = count
+                        self.merge_errorcount = 0 # reset
                         lastbackupfetch = now
                         backuplastday = day
             
