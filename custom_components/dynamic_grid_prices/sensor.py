@@ -195,13 +195,19 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
 
                 for (day, hour, minute,), nextvalue in nextprice.items(): # merge into firstprice
                     firstvalue = firstprice.get((day, hour, minute,), None)
-                    if (firstvalue.get("price") != None) and (nextvalue.get("price") != None) and  abs(nextvalue["price"] - firstvalue["price"]) > PRECISION:
-                        error = f"Error: sources inconsistent day/hour data {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                    error = None
+                    if firstvalue:
+                        if (firstvalue.get("price") != None) and (nextvalue.get("price") != None) and  abs(nextvalue["price"] - firstvalue["price"]) > PRECISION:
+                            error = f"Error: sources inconsistent day/hour data {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                            error_count = error_count + 1
+                            firstprice[(day, hour, minute,)]["price"] = max(firstvalue["price"], nextvalue["price"])
+                    else: 
+                        error =  f"Error: no firstsource day/hour data {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                        error_count = error_count +1
+                    if error:  
                         if error_count < 3: _LOGGER.warning(error)
                         else:_LOGGER.debug(error)
-                        error_count = error_count + 1
-                        firstprice[(day, hour, minute,)]["price"] = max(firstvalue["price"], nextvalue["price"])
-                    elif (firstvalue == None) and (nextvalue != None): firstprice[(day, hour, minute,)] = nextvalue
+                    if (firstvalue == None) and (nextvalue != None): firstprice[(day, hour, minute,)] = nextvalue
 
                 #_LOGGER.warning(f"firstprice merged {source}: {firstprice}")
                 for (day, hour, minute,), value in firstprice.items(): # scan merged items
