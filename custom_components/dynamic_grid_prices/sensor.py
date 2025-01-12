@@ -1,19 +1,16 @@
 """Sensor platform for integration_blueprint."""
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.const import CURRENCY_EURO, ENERGY_KILO_WATT_HOUR, ENERGY_MEGA_WATT_HOUR
+#from homeassistant.const import CURRENCY_EURO, ENERGY_KILO_WATT_HOUR, ENERGY_MEGA_WATT_HOUR
+from homeassistant.const import CURRENCY_EURO
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.util import dt
 from dataclasses import dataclass
 from statistics import mean
-from homeassistant.components.sensor import (
-    SensorEntityDescription,
-    STATE_CLASS_MEASUREMENT,
-    STATE_CLASS_TOTAL_INCREASING,
-)
+from homeassistant.components.sensor import SensorEntityDescription
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
-from homeassistant.const import (DEVICE_CLASS_MONETARY,)
+#from homeassistant.const import (DEVICE_CLASS_MONETARY,)
 from .const import NAME, VERSION, ATTRIBUTION
 from .const import DEFAULT_NAME, DOMAIN, ICON, SENSOR
 from .const import PEAKHOURS, OFFPEAKHOURS1, OFFPEAKHOURS2
@@ -235,7 +232,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                         'peak': mean(peak) if peak else 0,
                         'min': thismin,
                         'max': thismax,
-                        'unit':  {ENERGY_KILO_WATT_HOUR},
+                        'unit':  "kWh",
                         'currency' : CURRENCY_EURO,
                         'country': None,
                         'region': 'BE',
@@ -266,8 +263,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         descr = DynPriceSensorDescription( 
             name=f"{name} Entsoe Price",
             key=f"{name}_entsoe_price",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
+            native_unit_of_measurement=f"{CURRENCY_EURO}/MWh",
+            #device_class = DEVICE_CLASS_MONETARY,
             with_attribs = True,
             source       = "entsoe",
         )
@@ -298,8 +295,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         descr = DynPriceSensorDescription( 
             name=f"{name} Backup Price",
             key=f"{name}_backup_price",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
+            native_unit_of_measurement=f"{CURRENCY_EURO}/MWh",
+            #device_class = DEVICE_CLASS_MONETARY,
             with_attribs = True,
             source       = "backup",
         )
@@ -329,8 +326,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         descr = DynPriceSensorDescription( 
             name=f"{name} Consumption Price",
             key=f"{name}_consumption_price",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_KILO_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
+            native_unit_of_measurement=f"{CURRENCY_EURO}/kWh",
+            #device_class = DEVICE_CLASS_MONETARY,
             scale=entry.options[CONF_ENTSOE_FACTOR_A],
             extra=entry.options[CONF_ENTSOE_FACTOR_B],
             vat=entry.options[CONF_VAT_CONS],
@@ -343,8 +340,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         descr = DynPriceSensorDescription( 
             name=f"{name} Injection Price",
             key=f"{name}_injection_price",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_KILO_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
+            native_unit_of_measurement=f"{CURRENCY_EURO}/kWh",
+            #device_class = DEVICE_CLASS_MONETARY,
             scale=entry.options[CONF_ENTSOE_FACTOR_C],
             minus=entry.options[CONF_ENTSOE_FACTOR_D],
             vat=entry.options[CONF_VAT_INJ],
@@ -366,8 +363,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         descr = DynPriceSensorDescription( 
             name=f"{name} Factor B Consumption Extracost",
             key=f"{name}_factor_b_consumption_extracost",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
+            native_unit_of_measurement=f"{CURRENCY_EURO}/MWh",
+            #device_class = DEVICE_CLASS_MONETARY,
             static_value = entry.options[CONF_ENTSOE_FACTOR_B],
             entity_category = EntityCategory.DIAGNOSTIC,
         )
@@ -386,8 +383,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         descr = DynPriceSensorDescription( 
             name=f"{name} Factor D Production Extrafee",
             key=f"{name}_factor_d_production_extrafee",
-            native_unit_of_measurement=f"{CURRENCY_EURO}/{ENERGY_MEGA_WATT_HOUR}",
-            device_class = DEVICE_CLASS_MONETARY,
+            native_unit_of_measurement=f"{CURRENCY_EURO}/MWh",
+            #device_class = DEVICE_CLASS_MONETARY,
             static_value = entry.options[CONF_ENTSOE_FACTOR_D],
             entity_category = EntityCategory.DIAGNOSTIC,
         )
