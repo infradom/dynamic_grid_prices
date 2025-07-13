@@ -23,6 +23,8 @@ from .const import DOMAIN, PLATFORMS, SENSOR
 SCAN_INTERVAL = timedelta(seconds=10)
 UPDATE_INTERVAL = 900  # update data entities and addtibutes aligned to X seconds interval
 TIMEOUT = 10
+RESOLUTION = 3600 # may become 900
+RETRY  = 3600
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -112,16 +114,16 @@ class EntsoeApiClient:
                 _LOGGER.debug(jsond)
                 series = xpars['TimeSeries']
                 if isinstance(series, Mapping): series = [series]
-                res = { 'lastday' : 0, 'firstday': 0, 'firsthour': 0, 'lasthour': 0, 'firstminute': 0, 'lastminute': 0, 'points': {} }
+                res = { 'firstepoch' : 0, 'lastepoch': 0, 'points': {} }
                 #res = {}
                 count = 0
-                firstdayhourminute = 32*100*100 + 24*100 + 59
-                lastdayhourminute = 0
+                firstepoch = time.time() + 10*86400 
+                lastepoch  = 0
                 for ts in series:
                     start = ts['Period']['timeInterval']['start']
                     startts = datetime.strptime(start,'%Y-%m-%dT%H:%MZ').replace(tzinfo=timezone.utc).timestamp()
                     end = ts['Period']['timeInterval']['end']
-                    if ts['Period']['resolution'] == 'PT60M': seconds = 3600
+                    if ts['Period']['resolution'] == 'PT60M': seconds = RESOLUTION
                     else: seconds = None
                     for point in ts['Period']['Point']:
                         count = count + 1
@@ -131,18 +133,11 @@ class EntsoeApiClient:
                         localtime = datetime.fromtimestamp(timestamp)
                         price = float(point['price.amount'])
                         _LOGGER.info(f"{(zulutime.day, zulutime.hour, zulutime.minute,)} zulutime={datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()}Z localtime={datetime.fromtimestamp(timestamp).isoformat()} price={price}" )
-                        dayhourminute = zulutime.day*100*100 + zulutime.hour*100 + zulutime.minute
-                        if dayhourminute < firstdayhourminute: 
-                            firstdayhourminute = dayhourminute
-                            res['firstday'] = zulutime.day
-                            res['firsthour'] = zulutime.hour
-                            res['firstminute'] = zulutime.minute
-                        if dayhourminute  > lastdayhourminute: 
-                            lastdayhourminute = dayhourminute
-                            res['lastday'] = zulutime.day
-                            res['lasthour'] = zulutime.hour
-                            res['lastminute'] = zulutime.minute
+                        if timestamp < firstepoch: firstepoch = timestamp
+                        if timestamp > lastepoch:  lastepoch = timestamp
                         res['points'][(zulutime.day, zulutime.hour, zulutime.minute,)] = {"price": price, "interval": seconds, "zulutime":  datetime.fromtimestamp(timestamp, tz=timezone.utc), "localtime": datetime.fromtimestamp(timestamp)}
+                res['firstepoch'] = firstepoch
+                res['lastepoch'] = lastepoch
                 _LOGGER.info(f"fetched from entsoe: {res}")
                 self.status = "OK"
                 self.count = count
@@ -195,44 +190,43 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
             if self.entsoeapi: 
                 _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
                 # reduce number of cloud fetches
-                if (not self.entsoecache) or retry or ((now - self.lastentsoefetch >= 3600) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= zulutime.tm_mday)):
+                if (not self.entsoecache) or retry or ((now - self.lastentsoefetch >= RETRY) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= now + 43200)):
                     entsoecount = 0
                     entsoestatus = "Unknown"
                     try:
                         res1 = await self.entsoeapi.async_get_data()
                         if res1:
                             self.lastfetch = now
-                            self.entsoelastday = res1['lastday']
-                            self.entsoecache = res1['points']
+                            self.entsoelastday = res1['lastepoch']
+                            nonsorted = res1['points']
                             entsoestatus = self.entsoeapi.status
                             entsoecount = self.entsoeapi.count
                             self.merge_errorcount = 0 # reset
                     except Exception as exception:
                         entsoestatus = f"Error: entsoe read {exception}"
                         raise UpdateFailed() from exception
+                    
                     if res1:
                         # fill the holes with previous data
                         prev = None
-                        if res1['firstday'] == res1['lastday']: endh = res1['lasthour'] 
-                        else: endh = 23
-                        for hour in range(res1['firsthour'], endh+1):
-                            for minute in (0, ): # could become (0, 15, 30, 45,)
-                                val = self.entsoecache.get((res1['firstday'], hour, minute,)) 
-                                if val == None: self.entsoecache[(res1['firstday'], hour, minute,)] = prev
-                                else: prev = val
-                        if res1['firstday'] == res1['lastday']: endh = -1 
-                        else: endh = res1['lasthour']
-                        for hour in range(0, endh+1):
-                            for minute in (0, ): # could become (0, 15, 30, 45,)
-                                val = self.entsoecache.get((res1['lastday'], hour, minute,)) 
-                                if val == None: self.entsoecache[(res1['lastday'], hour, minute,)] = prev
-                                else: prev = val
+                        ts = res1['firstepoch']
+                        while ts < res1['lastepoch'] + 0.1:
+                            zulutime  = datetime.fromtimestamp(ts, tz=timezone.utc)
+                            val = nonsorted.get((zulutime.day, zulutime.hour, zulutime.minute,))
+                            if val == None: 
+                                nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)] = prev.copy()
+                                nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['localtime'] = datetime.fromtimestamp(ts)
+                                nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['zulutime']  = datetime.fromtimestamp(ts, tz=timezone.utc)
+                            else: prev = val
+                            ts = ts + RESOLUTION
+                        self.entsoecache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
+
                     self.statusdata["entsoestatus"] = entsoestatus
                     self.statusdata["entsoecount"]  = entsoecount
             if self.backupenabled and self.backupentity: # fetch nordpool style data
-                firstdayhourminute = 32*100*100 + 24*100 + 59
-                lastdayhourminute = 0
-                if (not self.backupcache) or retry or ((now - self.lastbackupfetch >= 3600) and (zulutime.tm_hour >= 11) and (self.backuplastday <= zulutime.tm_mday)):
+                firstepoch = now + 10*86400 
+                lastepoch  = 0
+                if (not self.backupcache) or retry or ((now - self.lastbackupfetch >= RETRY) and (zulutime.tm_hour >= 11) and (self.backuplastday <= now + 43200)):
                     backupstate = self.hass.states.get(self.backupentity)
                     if backupstate:
                         day = 0
@@ -246,40 +240,25 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     count = count + 1
                                     localstart = val['start']
                                     zulustart = val['start'].astimezone(pytz.utc)
-
                                     day = zulustart.day
                                     hour = zulustart.hour
                                     minute = zulustart.minute
-                                    dayhourminute = zulustart.day*100*100 + zulustart.hour*100 + zulustart.minute
-                                    if dayhourminute < firstdayhourminute: 
-                                        firstdayhourminute = dayhourminute
-                                        backupfirstday = day
-                                        backupfirsthour = hour
-                                        backupfirstminute = minute
-                                    if dayhourminute  > lastdayhourminute: 
-                                        lastdayhourminute = dayhourminute
-                                        backuplastday = day
-                                        backuplasthour = hour
-                                        backuplastminute = minute
-                                    interval = 3600
+                                    epoch = zulustart.timestamp()
+                                    if epoch < firstepoch: firstepoch = epoch
+                                    if epoch > lastepoch: lastepoch = epoch
+
+                                    interval = RESOLUTION
                                     self.backupcache[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
                             
-                            prev = None
                             # fill the holes with previous data
-                            if backupfirstday == backuplastday: endh = backuplasthour
-                            else: endh = 23
-                            for hour in range(backupfirsthour, endh+1):
-                                for minute in (0, ): # could become (0, 15, 30, 45,)
-                                    val = self.backupcache.get((backupfirstday, hour, minute,)) 
-                                    if val == None: self.backupcache[(backupfirstday, hour, minute,)] = prev
-                                    else: prev = val
-                            if backupfirstday == backuplastday: endh = -1
-                            else: endh = backuplasthour
-                            for hour in range(0, endh+1):
-                                for minute in (0, ): # could become (0, 15, 30, 45,)
-                                    val = self.backupcache.get((backuplastday, hour, minute,)) 
-                                    if val == None: self.backupcache[(backuplastday, hour, minute,)] = prev
-                                    else: prev = val
+                            prev = None
+                            ts = firstepoch
+                            while ts < lastepoch + 0.1:
+                                zulutime  = datetime.fromtimestamp(ts, tz=timezone.utc)
+                                val = self.entsoecache.get((zulutime.day, zulutime.hour, zulutime.minute,))
+                                if val == None: self.entsoecache[(zulutime.day, zulutime.hour, zulutime.minute,)] = prev
+                                else: prev = val
+                                ts = ts + RESOLUTION
                             
                         self.statusdata["backupstatus"] = "OK"
                         self.statusdata["backupcount"]  = count
