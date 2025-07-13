@@ -108,13 +108,15 @@ class EntsoeApiClient:
                 xml = await response.text()
                 xpars = xmltodict.parse(xml)
                 xpars = xpars['Publication_MarketDocument']
-                #jsond = json.dumps(xpars, indent=2)
-                #_LOGGER.info(jsond)
+                jsond = json.dumps(xpars, indent=2)
+                _LOGGER.debug(jsond)
                 series = xpars['TimeSeries']
                 if isinstance(series, Mapping): series = [series]
-                res = { 'lastday' : 0, 'points': {} }
+                res = { 'lastday' : 0, 'firstday': 0, 'firsthour': 0, 'lasthour': 0, 'firstminute': 0, 'lastminute': 0, 'points': {} }
                 #res = {}
                 count = 0
+                firstdayhourminute = 32*100*100 + 24*100 + 59
+                lastdayhourminute = 0
                 for ts in series:
                     start = ts['Period']['timeInterval']['start']
                     startts = datetime.strptime(start,'%Y-%m-%dT%H:%MZ').replace(tzinfo=timezone.utc).timestamp()
@@ -129,8 +131,18 @@ class EntsoeApiClient:
                         localtime = datetime.fromtimestamp(timestamp)
                         price = float(point['price.amount'])
                         _LOGGER.info(f"{(zulutime.day, zulutime.hour, zulutime.minute,)} zulutime={datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()}Z localtime={datetime.fromtimestamp(timestamp).isoformat()} price={price}" )
+                        dayhourminute = zulutime.day*100*100 + zulutime.hour*100 + zulutime.minute
+                        if dayhourminute < firstdayhourminute: 
+                            firstdayhourminute = dayhourminute
+                            res['firstday'] = zulutime.day
+                            res['firsthour'] = zulutime.hour
+                            res['firstminute'] = zulutime.minute
+                        if dayhourminute  > lastdayhourminute: 
+                            lastdayhourminute = dayhourminute
+                            res['lastday'] = zulutime.day
+                            res['lasthour'] = zulutime.hour
+                            res['lastminute'] = zulutime.minute
                         res['points'][(zulutime.day, zulutime.hour, zulutime.minute,)] = {"price": price, "interval": seconds, "zulutime":  datetime.fromtimestamp(timestamp, tz=timezone.utc), "localtime": datetime.fromtimestamp(timestamp)}
-                        if zulutime.day > res['lastday']: res['lastday'] = zulutime.day
                 _LOGGER.info(f"fetched from entsoe: {res}")
                 self.status = "OK"
                 self.count = count
@@ -196,11 +208,30 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                             entsoecount = self.entsoeapi.count
                             self.merge_errorcount = 0 # reset
                     except Exception as exception:
-                        entsoestatus = f"Error: {exception}"
+                        entsoestatus = f"Error: entsoe read {exception}"
                         raise UpdateFailed() from exception
+                    if res1:
+                        # fill the holes with previous data
+                        prev = None
+                        if res1['firstday'] == res1['lastday']: endh = res1['lasthour'] 
+                        else: endh = 23
+                        for hour in range(res1['firsthour'], endh+1):
+                            for minute in (0, ): # could become (0, 15, 30, 45,)
+                                val = self.entsoecache.get((res1['firstday'], hour, minute,)) 
+                                if val == None: self.entsoecache[(res1['firstday'], hour, minute,)] = prev
+                                else: prev = val
+                        if res1['firstday'] == res1['lastday']: endh = -1 
+                        else: endh = res1['lasthour']
+                        for hour in range(0, endh+1):
+                            for minute in (0, ): # could become (0, 15, 30, 45,)
+                                val = self.entsoecache.get((res1['lastday'], hour, minute,)) 
+                                if val == None: self.entsoecache[(res1['lastday'], hour, minute,)] = prev
+                                else: prev = val
                     self.statusdata["entsoestatus"] = entsoestatus
                     self.statusdata["entsoecount"]  = entsoecount
             if self.backupenabled and self.backupentity: # fetch nordpool style data
+                firstdayhourminute = 32*100*100 + 24*100 + 59
+                lastdayhourminute = 0
                 if (not self.backupcache) or retry or ((now - self.lastbackupfetch >= 3600) and (zulutime.tm_hour >= 11) and (self.backuplastday <= zulutime.tm_mday)):
                     backupstate = self.hass.states.get(self.backupentity)
                     if backupstate:
@@ -219,14 +250,43 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     day = zulustart.day
                                     hour = zulustart.hour
                                     minute = zulustart.minute
+                                    dayhourminute = zulustart.day*100*100 + zulustart.hour*100 + zulustart.minute
+                                    if dayhourminute < firstdayhourminute: 
+                                        firstdayhourminute = dayhourminute
+                                        backupfirstday = day
+                                        backupfirsthour = hour
+                                        backupfirstminute = minute
+                                    if dayhourminute  > lastdayhourminute: 
+                                        lastdayhourminute = dayhourminute
+                                        backuplastday = day
+                                        backuplasthour = hour
+                                        backuplastminute = minute
                                     interval = 3600
                                     self.backupcache[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
+                            
+                            prev = None
+                            # fill the holes with previous data
+                            if backupfirstday == backuplastday: endh = backuplasthour
+                            else: endh = 23
+                            for hour in range(backupfirsthour, endh+1):
+                                for minute in (0, ): # could become (0, 15, 30, 45,)
+                                    val = self.backupcache.get((backupfirstday, hour, minute,)) 
+                                    if val == None: self.backupcache[(backupfirstday, hour, minute,)] = prev
+                                    else: prev = val
+                            if backupfirstday == backuplastday: endh = -1
+                            else: endh = backuplasthour
+                            for hour in range(0, endh+1):
+                                for minute in (0, ): # could become (0, 15, 30, 45,)
+                                    val = self.backupcache.get((backuplastday, hour, minute,)) 
+                                    if val == None: self.backupcache[(backuplastday, hour, minute,)] = prev
+                                    else: prev = val
+                            
                         self.statusdata["backupstatus"] = "OK"
                         self.statusdata["backupcount"]  = count
                         self.merge_errorcount = 0 # reset
                         lastbackupfetch = now
-                        backuplastday = day
-            
+         
+
         # return combined cache dictionaries
         return {'entsoe': self.entsoecache,
                 'backup': self.backupcache }
