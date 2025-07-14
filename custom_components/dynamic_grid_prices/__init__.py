@@ -230,7 +230,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                     backupstate = self.hass.states.get(self.backupentity)
                     if backupstate:
                         day = 0
-                        self.backupcache   = {}
+                        nonsorted  = {}
                         count = 0
                         for inday in ['raw_today', 'raw_tomorrow']:
                             backupdata = backupstate.attributes[inday] 
@@ -248,17 +248,21 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     if epoch > lastepoch: lastepoch = epoch
 
                                     interval = RESOLUTION
-                                    self.backupcache[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
+                                    nonsorted[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
                             
                             # fill the holes with previous data
                             prev = None
                             ts = firstepoch
                             while ts < lastepoch + 0.1:
                                 zulutime  = datetime.fromtimestamp(ts, tz=timezone.utc)
-                                val = self.entsoecache.get((zulutime.day, zulutime.hour, zulutime.minute,))
-                                if val == None: self.entsoecache[(zulutime.day, zulutime.hour, zulutime.minute,)] = prev
+                                val = nonsorted.get((zulutime.day, zulutime.hour, zulutime.minute,))
+                                if val == None: 
+                                    nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)] = prev.copy()
+                                    nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['localtime'] = datetime.fromtimestamp(ts)
+                                    nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['zulutime']  = datetime.fromtimestamp(ts, tz=timezone.utc)
                                 else: prev = val
                                 ts = ts + RESOLUTION
+                        self.backupcache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
                             
                         self.statusdata["backupstatus"] = "OK"
                         self.statusdata["backupcount"]  = count
