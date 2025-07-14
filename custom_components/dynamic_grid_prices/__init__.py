@@ -180,7 +180,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Update data via library."""
         now = time.time()
-        zulutime = time.gmtime(now)
+        gmtime = time.gmtime(now)
         self.cyclecount = self.cyclecount+1
         slot = int(now)//UPDATE_INTERVAL # integer division in python3.x
 
@@ -188,9 +188,9 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
             self.lastcheck = slot 
             retry = (self.merge_errorcount > 0)
             if self.entsoeapi: 
-                _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {zulutime}")
+                _LOGGER.info(f"checking if entsoe api update is needed or data can be retrieved from cache at zulutime: {gmtime}")
                 # reduce number of cloud fetches
-                if (not self.entsoecache) or retry or ((now - self.lastentsoefetch >= RETRY) and (zulutime.tm_hour >= 11) and (self.entsoelastday <= now + 43200)):
+                if (not self.entsoecache) or retry or ((now - self.lastentsoefetch >= RETRY) and (gmtime.tm_hour >= 11) and (self.entsoelastday <= now + 43200)):
                     entsoecount = 0
                     entsoestatus = "Unknown"
                     try:
@@ -226,7 +226,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
             if self.backupenabled and self.backupentity: # fetch nordpool style data
                 firstepoch = now + 10*86400 
                 lastepoch  = 0
-                if (not self.backupcache) or retry or ((now - self.lastbackupfetch >= RETRY) and (zulutime.tm_hour >= 11) and (self.backuplastday <= now + 43200)):
+                if (not self.backupcache) or retry or ((now - self.lastbackupfetch >= RETRY) and (gmtime.tm_hour >= 11) and (self.backuplastday <= now + 43200)):
                     backupstate = self.hass.states.get(self.backupentity)
                     if backupstate:
                         day = 0
