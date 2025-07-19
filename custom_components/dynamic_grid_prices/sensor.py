@@ -18,6 +18,8 @@ from .const import CONF_ENTSOE_TOKEN, CONF_ENTSOE_AREA, CONF_ENTSOE_FACTOR_A, CO
 from .const import CONF_NAME, CONF_BACKUP_SOURCE, CONF_BACKUP
 import logging
 
+#import pprint # for pretty print only ***
+
 _LOGGER = logging.getLogger(__name__)
 
 PRECISION = 0.001
@@ -133,7 +135,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                             _LOGGER.warning(error2)
 
                 if (firstprice != None) and (nextprice != None) and abs(firstprice - nextprice) > PRECISION: 
-                    error = f"Error: sources inconsistent {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                    error = f"Error: sources inconsistent current value {firstsource}: {firstprice}, {nextsource}: {nextprice}"
                     _LOGGER.warning(error)
                     price = max(firstprice, nextprice)
                 elif (firstprice == None) and (nextprice != None): price = nextprice
@@ -153,6 +155,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
             localday = datetime.now().day
             #localtomorrow = (datetime.now() + timedelta(days=1)).day
 
+            pp = pprint.PrettyPrinter(indent=4, width = 40)
             thismin = 9999
             thismax = -9999
             #raw_today[source] = []
@@ -165,6 +168,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
             self._attrs = {}
             error_count = 0
             count = 0
+
             if self.coordinator.data: # probably useless teest
                 source = self.entity_description.source
                 if source == "any": sources = self.coordinator.sources
@@ -176,26 +180,28 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     firstsource = sources[0]
                     #_LOGGER.warning(f"firstsource {firstsource} data : {self.coordinator.data}")
                     if self.coordinator.data[firstsource]: 
+                        #_LOGGER.info(f"***next: {firstsource} {pp.pformat(self.coordinator.data[firstsource])}")
                         for (day, hour, minute,), rec in self.coordinator.data[firstsource].items():
                             newrec = rec.copy()
                             newrec["price"] = self._calc_price(rec["price"])
                             firstprice[(day, hour, minute,)] = newrec
-                    #_LOGGER.warning(f"firstprice: {firstsource} {firstprice}")
+                            #_LOGGER.info(f"***firstprice: {firstsource} {pp.pformat(newrec)}")
                 if len(sources) > 1:
                     nextsource = sources[1]
                     if self.coordinator.data[nextsource]:
+                        #_LOGGER.info(f"***next: {nextsource}  {pp.pformat(self.coordinator.data[nextsource])}")
                         for (day, hour, minute,), rec in self.coordinator.data[nextsource].items():
                             newrec = rec.copy()
                             newrec["price"] = self._calc_price(rec["price"])
                             nextprice[(day, hour, minute,)] = newrec
-                    #_LOGGER.warning(f"nextprice: {nextsource} {nextprice}")
+                            #_LOGGER.info(f"***nextprice: {nextsource} {pp.pformat(newrec)}")
 
                 for (day, hour, minute,), nextvalue in nextprice.items(): # merge into firstprice
                     firstvalue = firstprice.get((day, hour, minute,), None)
                     error = None
                     if firstvalue:
                         if (firstvalue.get("price") != None) and (nextvalue.get("price") != None) and  abs(nextvalue["price"] - firstvalue["price"]) > PRECISION:
-                            error = f"Error: sources inconsistent day/hour data {firstsource}: {firstprice}, {nextsource}: {nextprice}"
+                            error = f"Error: sources inconsistent attribute day/hour data {day}/{hour}/{minute} {firstsource}: {firstvalue["price"]}, {nextsource}: {nextvalue["price"]}"
                             error_count = error_count + 1
                             firstprice[(day, hour, minute,)]["price"] = max(firstvalue["price"], nextvalue["price"])
                     else: 
