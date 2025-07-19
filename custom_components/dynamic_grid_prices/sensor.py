@@ -17,6 +17,7 @@ from .const import PEAKHOURS, OFFPEAKHOURS1, OFFPEAKHOURS2
 from .const import CONF_ENTSOE_TOKEN, CONF_ENTSOE_AREA, CONF_ENTSOE_FACTOR_A, CONF_ENTSOE_FACTOR_B, CONF_ENTSOE_FACTOR_C, CONF_ENTSOE_FACTOR_D, CONF_VAT_INJ, CONF_VAT_CONS
 from .const import CONF_NAME, CONF_BACKUP_SOURCE, CONF_BACKUP
 import logging
+import time
 
 #import pprint # for pretty print only ***
 
@@ -62,6 +63,8 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
         self.count_entsoe = 0
         self.count_backup = 0
         self.count_any    = 0
+        self._last_attr_refresh_time = 0
+
         """self._value = value # typically a static value from config entry
         self._scale = scale # scaling factor 
         self._extro = extra # extra cost"""
@@ -151,7 +154,10 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
+        ts = time.time()
         if self.entity_description.with_attribs:
+            if (ts < self._last_attr_refresh_time + 1800): return self._attrs
+            self._last_attr_refresh_time = ts
             localday = datetime.now().day
             #localtomorrow = (datetime.now() + timedelta(days=1)).day
 
