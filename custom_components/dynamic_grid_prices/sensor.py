@@ -156,7 +156,8 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
         """Return the state attributes."""
         ts = time.time()
         if self.entity_description.with_attribs:
-            if (ts < self._last_attr_refresh_time + 1800): return self._attrs
+            if (ts < self._last_attr_refresh_time + 1800) and (self.coordinator.lastupdate < self._last_attr_refresh_time):
+                return self._attrs
             self._last_attr_refresh_time = ts
             localday = datetime.now().day
             #localtomorrow = (datetime.now() + timedelta(days=1)).day

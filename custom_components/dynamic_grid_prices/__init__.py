@@ -172,6 +172,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
         self.cyclecount = 0
         self.statusdata = {}
         self.merge_errorcount = 0
+        self.lastupdate = 0
         if self.entsoeapi: self.sources.append("entsoe")
         if self.backupenabled and self.backupentity: self.sources.append("backup")
 
@@ -263,6 +264,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                 else: prev = val
                                 ts = ts + RESOLUTION
                         self.backupcache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
+                        self.lastupdate = now
                             
                         self.statusdata["backupstatus"] = "OK"
                         self.statusdata["backupcount"]  = count
