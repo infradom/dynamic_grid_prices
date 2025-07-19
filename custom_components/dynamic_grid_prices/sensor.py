@@ -155,7 +155,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
             localday = datetime.now().day
             #localtomorrow = (datetime.now() + timedelta(days=1)).day
 
-            pp = pprint.PrettyPrinter(indent=4, width = 40)
+            #pp = pprint.PrettyPrinter(indent=4, width = 40) # ***
             thismin = 9999
             thismax = -9999
             #raw_today[source] = []
