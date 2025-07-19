@@ -143,7 +143,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     price = max(firstprice, nextprice)
                 elif (firstprice == None) and (nextprice != None): price = nextprice
                 else: price = firstprice
-                if price == None: price = 0.0 # entsoe sometimes misses data - should probably be previous value 
+                if price == None: price = 0.0 # should not occur anymmore since we filled the gaps
             if error  and not self.coordinator.statusdata["mergestatus"]:          self.coordinator.statusdata["mergestatus"] = error
             if error1 and not self.coordinator.statusdata[f"{firstsource}status"]: self.coordinator.statusdata[f"{firstsource}status"] = error1
             if error2 and not self.coordinator.statusdata[f"{nextsource}status"]:  self.coordinator.statusdata[f"{nextsource}status"]  = error2
