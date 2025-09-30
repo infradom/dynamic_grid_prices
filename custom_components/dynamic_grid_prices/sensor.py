@@ -107,6 +107,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
             nowday = now.day
             nextday = (now + timedelta(days=1)).day
             nowhour = now.hour
+            nowminute = now.minute // 15 * 15
             rec = None
             prices = {} 
             if self.coordinator.data:
@@ -120,7 +121,7 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                     firstsource = sources[0]
                     rec = None
                     #_LOGGER.warning(f"firstsource {firstsource} data : {self.coordinator.data}")
-                    if self.coordinator.data[firstsource]: rec = self.coordinator.data[firstsource].get((nowday, nowhour, 0,) , None)
+                    if self.coordinator.data[firstsource]: rec = self.coordinator.data[firstsource].get((nowday, nowhour, nowminute,) , None)
                     if rec: firstprice = rec["price"]
                     else: 
                         if self.coordinator.cyclecount > 6:
@@ -130,11 +131,11 @@ class DynPriceSensor(DynPriceEntity, SensorEntity):
                 if len(sources) > 1:
                     nextsource = sources[1]
                     rec = None
-                    if self.coordinator.data[nextsource]: rec = self.coordinator.data[nextsource].get((nowday, nowhour, 0,) , None)
+                    if self.coordinator.data[nextsource]: rec = self.coordinator.data[nextsource].get((nowday, nowhour, nowminute,) , None)
                     if rec: nextprice = rec["price"]
                     else: 
                         if self.coordinator.cyclecount > 6: 
-                            error2 = f"Warning: no data from {nextsource} for now: day={nowday} hour={nowhour}"
+                            error2 = f"Warning: no data from {nextsource} for now: day={nowday} hour={nowhour} minute={nowminute}"
                             _LOGGER.warning(error2)
 
                 if (firstprice != None) and (nextprice != None) and abs(firstprice - nextprice) > PRECISION: 

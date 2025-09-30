@@ -14,7 +14,7 @@ NAME = "DynGridPrices"
 DEFAULT_NAME = "Dynamic_grid_prices"
 DOMAIN = "dynamic_grid_prices"
 DOMAIN_DATA = f"{DOMAIN}_data"
-VERSION = "0.4.0"
+VERSION = "0.4.2"
 ISSUE_URL = "https://github.com/infradom/dynamic_grid_prices_solar/issues"
 
 PEAKHOURS = range(8,20)
