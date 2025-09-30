@@ -23,7 +23,7 @@ from .const import DOMAIN, PLATFORMS, SENSOR
 SCAN_INTERVAL = timedelta(seconds=10)
 UPDATE_INTERVAL = 900  # update data entities and addtibutes aligned to X seconds interval
 TIMEOUT = 10
-RESOLUTION = 3600 # may become 900
+#RESOLUTION = 3600 # may become 900
 RETRY  = 3600
 
 _LOGGER = logging.getLogger(__name__)
@@ -123,7 +123,8 @@ class EntsoeApiClient:
                     start = ts['Period']['timeInterval']['start']
                     startts = datetime.strptime(start,'%Y-%m-%dT%H:%MZ').replace(tzinfo=timezone.utc).timestamp()
                     end = ts['Period']['timeInterval']['end']
-                    if ts['Period']['resolution'] == 'PT60M': seconds = RESOLUTION
+                    if ts['Period']['resolution'] == 'PT60M': seconds = 3600
+                    if ts['Period']['resolution'] == 'PT15M': seconds = 900
                     else: seconds = None
                     for point in ts['Period']['Point']:
                         count = count + 1
@@ -138,6 +139,7 @@ class EntsoeApiClient:
                         res['points'][(zulutime.day, zulutime.hour, zulutime.minute,)] = {"price": price, "interval": seconds, "zulutime":  datetime.fromtimestamp(timestamp, tz=timezone.utc), "localtime": datetime.fromtimestamp(timestamp)}
                 res['firstepoch'] = firstepoch
                 res['lastepoch'] = lastepoch
+                res['resolution'] = seconds
                 _LOGGER.info(f"fetched from entsoe: {res}")
                 self.status = "OK"
                 self.count = count
@@ -173,6 +175,8 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
         self.statusdata = {}
         self.merge_errorcount = 0
         self.lastupdate = 0
+        self.entsoe_resolution = None
+        self.backup_resolution = None
         if self.entsoeapi: self.sources.append("entsoe")
         if self.backupenabled and self.backupentity: self.sources.append("backup")
 
@@ -199,6 +203,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                         if res1:
                             self.lastfetch = now
                             self.entsoelastday = res1['lastepoch']
+                            self.entsoe_resolution = res1['resolution']
                             nonsorted = res1['points']
                             entsoestatus = self.entsoeapi.status
                             entsoecount = self.entsoeapi.count
@@ -219,7 +224,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                 nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['localtime'] = datetime.fromtimestamp(ts)
                                 nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['zulutime']  = datetime.fromtimestamp(ts, tz=timezone.utc)
                             else: prev = val
-                            ts = ts + RESOLUTION
+                            ts = ts + self.entsoe_resolution
                         self.entsoecache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
 
                     self.statusdata["entsoestatus"] = entsoestatus
@@ -245,10 +250,11 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     hour = zulustart.hour
                                     minute = zulustart.minute
                                     epoch = zulustart.timestamp()
+                                    interval =  val['end'].astimezone(pytz.utc).timestamp() - epoch
+                                    self.backup_resolution = interval
                                     if epoch < firstepoch: firstepoch = epoch
                                     if epoch > lastepoch: lastepoch = epoch
 
-                                    interval = RESOLUTION
                                     nonsorted[(day, hour, minute,)]   = {"price": value, "interval": interval, "zulutime": zulustart, "localtime": localstart}
                             
                             # fill the holes with previous data
@@ -262,7 +268,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['localtime'] = datetime.fromtimestamp(ts)
                                     nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['zulutime']  = datetime.fromtimestamp(ts, tz=timezone.utc)
                                 else: prev = val
-                                ts = ts + RESOLUTION
+                                ts = ts + self.backup_resolution
                         self.backupcache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
                         self.lastupdate = now
                             
