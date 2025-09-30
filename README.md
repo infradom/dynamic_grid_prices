@@ -25,7 +25,9 @@ The Entsoe data source is generic and does not know your energy company's markup
 ## Backup Nordpool data source:
 This integration can use a Nordpool integration instance as backup data source. The Nordpool data souce can even be used as main source if no Entsoe API token is specified. You first need to install the Nordpool integration and configure an instance that expresses the cost in cost/Mwh, as the scaling factors are shared with the Entsoe source. Creating such additional sensors can be done in the Nordpool reconfiguration menu (add item button).
 
-    <img width="649" height="451" alt="image" src="https://github.com/user-attachments/assets/56459337-54d9-455b-aeb9-ed9a2d53498d" />
+<img width="645" height="438" alt="image" src="https://github.com/user-attachments/assets/2389de5d-cc00-4d25-b684-79e4bd3a63cd" />
+
+
 
 This will create the entity that needs to be used as backup source.
 
