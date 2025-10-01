@@ -23,7 +23,7 @@ This integration uses entsoe as data source, so you will need to create a entsoe
 The Entsoe data source is generic and does not know your energy company's markup costs. Extra cost and scaling factors can be applied for both consumption and injection.  If you do not want to use Entsoe as data source, leave the API token field empty and select the backup source flag.
 
 ## Backup Nordpool data source:
-This integration can use a Nordpool integration instance as backup data source. The Nordpool data souce can even be used as main source if no Entsoe API token is specified. You first need to install the Nordpool integration and configure an instance that expresses the cost in cost/Mwh, as the scaling factors are shared with the Entsoe source. Creating such additional sensors can be done in the Nordpool reconfiguration menu (add item button).
+This integration can use a Nordpool integration instance (HACS version) as backup data source. The Nordpool data souce can even be used as main source if no Entsoe API token is specified. You first need to install the Nordpool integration (version from HACS, not the builtin HA version) and configure an instance that expresses the cost in cost/Mwh, as the scaling factors are shared with the Entsoe source. Creating such additional sensors can be done in the Nordpool reconfiguration menu (add item button).
 
 <img width="645" height="438" alt="image" src="https://github.com/user-attachments/assets/2389de5d-cc00-4d25-b684-79e4bd3a63cd" />
 
