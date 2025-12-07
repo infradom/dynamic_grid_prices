@@ -22,7 +22,7 @@ from .const import DOMAIN, PLATFORMS, SENSOR
 
 SCAN_INTERVAL = timedelta(seconds=10)
 UPDATE_INTERVAL = 900  # update data entities and addtibutes aligned to X seconds interval
-TIMEOUT = 10
+TIMEOUT = 20
 #RESOLUTION = 3600 # may become 900
 RETRY  = 3600
 
