@@ -225,7 +225,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                 nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['zulutime']  = datetime.fromtimestamp(ts, tz=timezone.utc)
                             else: prev = val
                             ts = ts + self.entsoe_resolution
-                        self.entsoecache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
+                        self.entsoecache = dict(sorted(nonsorted.items(), key= lambda item: item[1]["zulutime"])) # sort by (day, hour, minute,)
 
                     self.statusdata["entsoestatus"] = entsoestatus
                     self.statusdata["entsoecount"]  = entsoecount
@@ -269,7 +269,7 @@ class DynPriceUpdateCoordinator(DataUpdateCoordinator):
                                     nonsorted[(zulutime.day, zulutime.hour, zulutime.minute,)]['zulutime']  = datetime.fromtimestamp(ts, tz=timezone.utc)
                                 else: prev = val
                                 ts = ts + self.backup_resolution
-                        self.backupcache = dict(sorted(nonsorted.items())) # sort by (day, hour, minute,)
+                        self.backupcache = dict(sorted(nonsorted.items(), key= lambda item: item[1]["zulutime"])) # sort by (day, hour, minute,)                    
                         self.lastupdate = now
                             
                         self.statusdata["backupstatus"] = "OK"

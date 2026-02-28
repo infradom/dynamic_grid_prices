@@ -1,7 +1,7 @@
 {
   "domain": "dynamic_grid_prices",
   "name": "DynGridPrices",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "config_flow": true,
   "documentation": "https:/github.com/infradom/dynamic_grid_prices",
   "issue_tracker": "https://github.com/infradom/dynamic_grid_prices/issues",
