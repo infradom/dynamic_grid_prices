@@ -6,6 +6,7 @@ Work in progress !
 Although I am using this software in my installation, recent versions may not always be proberly tested the first days after release.
 
 # Version history:
+* v0.5.0: correct a sorting error that occurred at the end of every month
 * v0.4.2: adaptation to support 15 minute intervals (urgent update was needed)
 * v0.3.0: fill gaps in entsoe and backup data; sort data so that graphs are not currupted when data is not sorted correctly
 * v0.2.x: compatibility with HA 2025.6.x
